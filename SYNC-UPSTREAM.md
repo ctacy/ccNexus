@@ -49,3 +49,36 @@ git rebase --abort
   - `cmd/desktop/frontend/src/modules/settings.js`
   - `cmd/desktop/frontend/src/i18n/zh-CN.js`
   - `cmd/desktop/frontend/src/i18n/en.js`
+
+## 我的修改起点
+
+```
+起始 Commit: 9f156dd4bc80e0e9bcd19acb24a1f14ee3bbf8d4
+描述: feat: add blacklist config to settings UI
+```
+
+## 冲突快速恢复方案
+
+如果 rebase 冲突太多太乱，可以重新应用你的修改：
+
+```bash
+# 1. 放弃当前 rebase
+git rebase --abort
+
+# 2. 切到最新 main
+git checkout main
+git pull upstream main
+
+# 3. 创建新分支
+git checkout -b my-custom-v2
+
+# 4. Cherry-pick 你的修改提交
+git cherry-pick 9f156dd4bc80e0e9bcd19acb24a1f14ee3bbf8d4
+
+# 5. 如果还是有冲突，解决后：
+git add .
+git cherry-pick --continue
+
+# 6. 推送新分支
+git push origin my-custom-v2
+```
