@@ -612,7 +612,7 @@ func (s *SQLiteStorage) DetectEndpointConflicts(remoteDBPath string) ([]MergeCon
 
 // getEndpointsFromDB gets endpoints from a specific database (main or attached)
 func (s *SQLiteStorage) getEndpointsFromDB(db *sql.DB, dbName string) ([]Endpoint, error) {
-	query := fmt.Sprintf(`SELECT id, name, api_url, api_key, enabled, transformer, model, remark, COALESCE(sort_order, 0) as sort_order, created_at, updated_at FROM %s.endpoints`, dbName)
+	query := fmt.Sprintf(`SELECT id, name, api_url, api_key, enabled, transformer, model, remark, COALESCE(sort_order, 0) as sort_order, COALESCE(priority, 5) as priority, created_at, updated_at FROM %s.endpoints`, dbName)
 	rows, err := db.Query(query)
 	if err != nil {
 		return nil, err
@@ -622,7 +622,7 @@ func (s *SQLiteStorage) getEndpointsFromDB(db *sql.DB, dbName string) ([]Endpoin
 	var endpoints []Endpoint
 	for rows.Next() {
 		var ep Endpoint
-		if err := rows.Scan(&ep.ID, &ep.Name, &ep.APIUrl, &ep.APIKey, &ep.Enabled, &ep.Transformer, &ep.Model, &ep.Remark, &ep.SortOrder, &ep.CreatedAt, &ep.UpdatedAt); err != nil {
+		if err := rows.Scan(&ep.ID, &ep.Name, &ep.APIUrl, &ep.APIKey, &ep.Enabled, &ep.Transformer, &ep.Model, &ep.Remark, &ep.SortOrder, &ep.Priority, &ep.CreatedAt, &ep.UpdatedAt); err != nil {
 			return nil, err
 		}
 		endpoints = append(endpoints, ep)
@@ -652,6 +652,9 @@ func compareEndpoints(local, remote Endpoint) []string {
 	}
 	if local.Remark != remote.Remark {
 		conflicts = append(conflicts, "remark")
+	}
+	if local.Priority != remote.Priority {
+		conflicts = append(conflicts, "priority")
 	}
 
 	return conflicts
@@ -714,8 +717,8 @@ func (s *SQLiteStorage) mergeEndpoints(tx *sql.Tx, strategy MergeStrategy) error
 		// 只插入新端点（忽略冲突）
 		_, err := tx.Exec(`
 			INSERT OR IGNORE INTO endpoints
-			(name, api_url, api_key, enabled, transformer, model, remark, sort_order)
-			SELECT name, api_url, api_key, enabled, transformer, model, remark, COALESCE(sort_order, 0)
+			(name, api_url, api_key, enabled, transformer, model, remark, sort_order, priority)
+			SELECT name, api_url, api_key, enabled, transformer, model, remark, COALESCE(sort_order, 0), COALESCE(priority, 5)
 			FROM backup.endpoints
 		`)
 		return err
@@ -723,8 +726,8 @@ func (s *SQLiteStorage) mergeEndpoints(tx *sql.Tx, strategy MergeStrategy) error
 		// 替换已存在的端点
 		_, err := tx.Exec(`
 			INSERT OR REPLACE INTO endpoints
-			(name, api_url, api_key, enabled, transformer, model, remark, sort_order)
-			SELECT name, api_url, api_key, enabled, transformer, model, remark, COALESCE(sort_order, 0)
+			(name, api_url, api_key, enabled, transformer, model, remark, sort_order, priority)
+			SELECT name, api_url, api_key, enabled, transformer, model, remark, COALESCE(sort_order, 0), COALESCE(priority, 5)
 			FROM backup.endpoints
 		`)
 		return err
