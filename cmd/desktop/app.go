@@ -121,7 +121,8 @@ func (a *App) startup(ctx context.Context) {
 	}
 
 	statsAdapter := storage.NewStatsStorageAdapter(sqliteStorage)
-	a.proxy = proxy.New(cfg, statsAdapter, deviceID)
+	// AI Accept: Pass SQLiteStorage as blacklist storage for priority-based endpoint selection
+	a.proxy = proxy.New(cfg, statsAdapter, deviceID, sqliteStorage)
 
 	a.proxy.SetOnEndpointSuccess(func(endpointName string) {
 		runtime.EventsEmit(ctx, "endpoint:success", endpointName)
@@ -368,12 +369,15 @@ func (a *App) GetStatsTrendByPeriod(period string) string {
 
 // ========== Endpoint Bindings ==========
 
-func (a *App) AddEndpoint(name, apiUrl, apiKey, transformer, model, remark string) error {
-	return a.endpoint.AddEndpoint(name, apiUrl, apiKey, transformer, model, remark)
+// AI Accept: Added priority parameter for endpoint priority-based selection
+func (a *App) AddEndpoint(name, apiUrl, apiKey, transformer, model, remark string, priority int) error {
+	return a.endpoint.AddEndpoint(name, apiUrl, apiKey, transformer, model, remark, priority)
 }
 func (a *App) RemoveEndpoint(index int) error { return a.endpoint.RemoveEndpoint(index) }
-func (a *App) UpdateEndpoint(index int, name, apiUrl, apiKey, transformer, model, remark string) error {
-	return a.endpoint.UpdateEndpoint(index, name, apiUrl, apiKey, transformer, model, remark)
+
+// AI Accept: Added priority parameter for endpoint priority-based selection
+func (a *App) UpdateEndpoint(index int, name, apiUrl, apiKey, transformer, model, remark string, priority int) error {
+	return a.endpoint.UpdateEndpoint(index, name, apiUrl, apiKey, transformer, model, remark, priority)
 }
 func (a *App) ToggleEndpoint(index int, enabled bool) error {
 	return a.endpoint.ToggleEndpoint(index, enabled)
@@ -388,6 +392,15 @@ func (a *App) TestEndpointLight(index int) string { return a.endpoint.TestEndpoi
 func (a *App) TestAllEndpointsZeroCost() string   { return a.endpoint.TestAllEndpointsZeroCost() }
 func (a *App) FetchModels(apiUrl, apiKey, transformer string) string {
 	return a.endpoint.FetchModels(apiUrl, apiKey, transformer)
+}
+
+// AI Accept: Added for endpoint blacklist management
+func (a *App) GetBlacklistStatus() string { return a.endpoint.GetBlacklistStatus() }
+func (a *App) RemoveFromBlacklist(endpointName string) error {
+	return a.endpoint.RemoveFromBlacklist(endpointName)
+}
+func (a *App) IsEndpointBlacklisted(endpointName string) bool {
+	return a.endpoint.IsEndpointBlacklisted(endpointName)
 }
 
 // ========== Settings Bindings ==========
@@ -420,6 +433,12 @@ func (a *App) GetProxyURL() string               { return a.settings.GetProxyURL
 func (a *App) SetProxyURL(proxyURL string) error { return a.settings.SetProxyURL(proxyURL) }
 func (a *App) SaveSettings(settingsJSON string) error {
 	return a.settings.SaveSettings(settingsJSON)
+}
+
+// AI Accept: Added for endpoint blacklist configuration management
+func (a *App) GetBlacklistConfig() string { return a.settings.GetBlacklistConfig() }
+func (a *App) UpdateBlacklistConfig(threshold, durationMinutes int) error {
+	return a.settings.UpdateBlacklistConfig(threshold, durationMinutes)
 }
 
 // ========== WebDAV Bindings ==========

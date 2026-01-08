@@ -76,6 +76,7 @@ func (s *SQLiteStorage) initSchema() error {
 		model TEXT,
 		remark TEXT,
 		sort_order INTEGER DEFAULT 0,
+		priority INTEGER DEFAULT 5,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
@@ -99,9 +100,20 @@ func (s *SQLiteStorage) initSchema() error {
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
 
+	CREATE TABLE IF NOT EXISTS endpoint_blacklist (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		endpoint_name TEXT UNIQUE NOT NULL,
+		consecutive_failures INTEGER DEFAULT 0,
+		blacklisted_at DATETIME,
+		expires_at DATETIME,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
+
 	CREATE INDEX IF NOT EXISTS idx_daily_stats_date ON daily_stats(date);
 	CREATE INDEX IF NOT EXISTS idx_daily_stats_endpoint ON daily_stats(endpoint_name);
 	CREATE INDEX IF NOT EXISTS idx_daily_stats_device ON daily_stats(device_id);
+	CREATE INDEX IF NOT EXISTS idx_blacklist_expires ON endpoint_blacklist(expires_at);
 	`
 
 	if _, err := s.db.Exec(schema); err != nil {
@@ -110,6 +122,11 @@ func (s *SQLiteStorage) initSchema() error {
 
 	// Migration: Add sort_order column if it doesn't exist
 	if err := s.migrateSortOrder(); err != nil {
+		return err
+	}
+
+	// Migration: Add priority column if it doesn't exist
+	if err := s.migratePriority(); err != nil {
 		return err
 	}
 
@@ -141,11 +158,30 @@ func (s *SQLiteStorage) migrateSortOrder() error {
 	return nil
 }
 
+// migratePriority adds the priority column to existing databases
+func (s *SQLiteStorage) migratePriority() error {
+	// Check if priority column exists
+	var count int
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('endpoints') WHERE name='priority'`).Scan(&count)
+	if err != nil {
+		return err
+	}
+
+	// If column doesn't exist, add it with default value 5
+	if count == 0 {
+		if _, err := s.db.Exec(`ALTER TABLE endpoints ADD COLUMN priority INTEGER DEFAULT 5`); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (s *SQLiteStorage) GetEndpoints() ([]Endpoint, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	rows, err := s.db.Query(`SELECT id, name, api_url, api_key, enabled, transformer, model, remark, sort_order, created_at, updated_at FROM endpoints ORDER BY sort_order ASC`)
+	rows, err := s.db.Query(`SELECT id, name, api_url, api_key, enabled, transformer, model, remark, sort_order, COALESCE(priority, 5) as priority, created_at, updated_at FROM endpoints ORDER BY sort_order ASC`)
 	if err != nil {
 		return nil, err
 	}
@@ -154,7 +190,7 @@ func (s *SQLiteStorage) GetEndpoints() ([]Endpoint, error) {
 	var endpoints []Endpoint
 	for rows.Next() {
 		var ep Endpoint
-		if err := rows.Scan(&ep.ID, &ep.Name, &ep.APIUrl, &ep.APIKey, &ep.Enabled, &ep.Transformer, &ep.Model, &ep.Remark, &ep.SortOrder, &ep.CreatedAt, &ep.UpdatedAt); err != nil {
+		if err := rows.Scan(&ep.ID, &ep.Name, &ep.APIUrl, &ep.APIKey, &ep.Enabled, &ep.Transformer, &ep.Model, &ep.Remark, &ep.SortOrder, &ep.Priority, &ep.CreatedAt, &ep.UpdatedAt); err != nil {
 			return nil, err
 		}
 		endpoints = append(endpoints, ep)
@@ -167,8 +203,14 @@ func (s *SQLiteStorage) SaveEndpoint(ep *Endpoint) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	result, err := s.db.Exec(`INSERT INTO endpoints (name, api_url, api_key, enabled, transformer, model, remark, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		ep.Name, ep.APIUrl, ep.APIKey, ep.Enabled, ep.Transformer, ep.Model, ep.Remark, ep.SortOrder)
+	// Default priority to 5 if not set
+	priority := ep.Priority
+	if priority == 0 {
+		priority = 5
+	}
+
+	result, err := s.db.Exec(`INSERT INTO endpoints (name, api_url, api_key, enabled, transformer, model, remark, sort_order, priority) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		ep.Name, ep.APIUrl, ep.APIKey, ep.Enabled, ep.Transformer, ep.Model, ep.Remark, ep.SortOrder, priority)
 	if err != nil {
 		return err
 	}
@@ -185,8 +227,14 @@ func (s *SQLiteStorage) UpdateEndpoint(ep *Endpoint) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	_, err := s.db.Exec(`UPDATE endpoints SET api_url=?, api_key=?, enabled=?, transformer=?, model=?, remark=?, sort_order=?, updated_at=CURRENT_TIMESTAMP WHERE name=?`,
-		ep.APIUrl, ep.APIKey, ep.Enabled, ep.Transformer, ep.Model, ep.Remark, ep.SortOrder, ep.Name)
+	// Default priority to 5 if not set
+	priority := ep.Priority
+	if priority == 0 {
+		priority = 5
+	}
+
+	_, err := s.db.Exec(`UPDATE endpoints SET api_url=?, api_key=?, enabled=?, transformer=?, model=?, remark=?, sort_order=?, priority=?, updated_at=CURRENT_TIMESTAMP WHERE name=?`,
+		ep.APIUrl, ep.APIKey, ep.Enabled, ep.Transformer, ep.Model, ep.Remark, ep.SortOrder, priority, ep.Name)
 	return err
 }
 
@@ -768,4 +816,137 @@ func (s *SQLiteStorage) mergeAppConfig(tx *sql.Tx, strategy MergeStrategy) error
 	default:
 		return fmt.Errorf("unknown merge strategy: %s", strategy)
 	}
+}
+
+// ========== Blacklist Methods ==========
+
+// RecordEndpointFailure records a failure for an endpoint and returns true if it should be blacklisted
+func (s *SQLiteStorage) RecordEndpointFailure(endpointName string, threshold int, durationMinutes int) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	now := time.Now()
+
+	// Try to get existing record
+	var failures int
+	var blacklistedAt sql.NullTime
+	err := s.db.QueryRow(`SELECT consecutive_failures, blacklisted_at FROM endpoint_blacklist WHERE endpoint_name = ?`, endpointName).Scan(&failures, &blacklistedAt)
+
+	if err == sql.ErrNoRows {
+		// First failure, create new record
+		_, err = s.db.Exec(`INSERT INTO endpoint_blacklist (endpoint_name, consecutive_failures, updated_at) VALUES (?, 1, ?)`, endpointName, now)
+		return false, err
+	}
+	if err != nil {
+		return false, err
+	}
+
+	// Already blacklisted, just return
+	if blacklistedAt.Valid {
+		return true, nil
+	}
+
+	// Increment failure count
+	failures++
+	shouldBlacklist := failures >= threshold
+
+	if shouldBlacklist {
+		// Add to blacklist
+		expiresAt := now.Add(time.Duration(durationMinutes) * time.Minute)
+		_, err = s.db.Exec(`UPDATE endpoint_blacklist SET consecutive_failures = ?, blacklisted_at = ?, expires_at = ?, updated_at = ? WHERE endpoint_name = ?`,
+			failures, now, expiresAt, now, endpointName)
+	} else {
+		// Just update failure count
+		_, err = s.db.Exec(`UPDATE endpoint_blacklist SET consecutive_failures = ?, updated_at = ? WHERE endpoint_name = ?`,
+			failures, now, endpointName)
+	}
+
+	return shouldBlacklist, err
+}
+
+// RecordEndpointSuccess clears the failure count for an endpoint
+func (s *SQLiteStorage) RecordEndpointSuccess(endpointName string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Delete the blacklist record to reset everything
+	_, err := s.db.Exec(`DELETE FROM endpoint_blacklist WHERE endpoint_name = ?`, endpointName)
+	return err
+}
+
+// IsEndpointBlacklisted checks if an endpoint is currently blacklisted
+func (s *SQLiteStorage) IsEndpointBlacklisted(endpointName string) (bool, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var expiresAt sql.NullTime
+	err := s.db.QueryRow(`SELECT expires_at FROM endpoint_blacklist WHERE endpoint_name = ? AND blacklisted_at IS NOT NULL`, endpointName).Scan(&expiresAt)
+
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+
+	// Check if blacklist has expired
+	if expiresAt.Valid && time.Now().After(expiresAt.Time) {
+		return false, nil
+	}
+
+	return true, nil
+}
+
+// GetBlacklistedEndpoints returns all currently blacklisted endpoints
+func (s *SQLiteStorage) GetBlacklistedEndpoints() ([]EndpointBlacklist, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	now := time.Now()
+	rows, err := s.db.Query(`
+		SELECT id, endpoint_name, consecutive_failures, blacklisted_at, expires_at, created_at, updated_at
+		FROM endpoint_blacklist
+		WHERE blacklisted_at IS NOT NULL AND (expires_at IS NULL OR expires_at > ?)
+	`, now)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []EndpointBlacklist
+	for rows.Next() {
+		var bl EndpointBlacklist
+		var blacklistedAt, expiresAt sql.NullTime
+		if err := rows.Scan(&bl.ID, &bl.EndpointName, &bl.ConsecutiveFailures, &blacklistedAt, &expiresAt, &bl.CreatedAt, &bl.UpdatedAt); err != nil {
+			return nil, err
+		}
+		if blacklistedAt.Valid {
+			bl.BlacklistedAt = &blacklistedAt.Time
+		}
+		if expiresAt.Valid {
+			bl.ExpiresAt = &expiresAt.Time
+		}
+		results = append(results, bl)
+	}
+
+	return results, rows.Err()
+}
+
+// RemoveFromBlacklist manually removes an endpoint from the blacklist
+func (s *SQLiteStorage) RemoveFromBlacklist(endpointName string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	_, err := s.db.Exec(`DELETE FROM endpoint_blacklist WHERE endpoint_name = ?`, endpointName)
+	return err
+}
+
+// CleanExpiredBlacklist removes all expired blacklist entries
+func (s *SQLiteStorage) CleanExpiredBlacklist() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	now := time.Now()
+	_, err := s.db.Exec(`DELETE FROM endpoint_blacklist WHERE expires_at IS NOT NULL AND expires_at <= ?`, now)
+	return err
 }

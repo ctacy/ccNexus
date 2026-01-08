@@ -166,13 +166,14 @@ export async function renderEndpoints(endpoints) {
         const transformer = ep.transformer || 'claude';
         const model = ep.model || '';
         const isCurrentEndpoint = ep.name === currentEndpointName;
+        const priority = (ep.priority >= 1 && ep.priority <= 10) ? ep.priority : 5;
 
         const item = document.createElement('div');
         item.className = 'endpoint-item';
         item.draggable = true;
         item.dataset.name = ep.name;
         item.dataset.index = index;
-        // 获取测试状态：true=成功显示✅，false=失败显示❌，undefined/unknown=未测试/未知显示⚠️
+        // Get test status: true=success shows ✅, false=failed shows ❌, undefined/unknown=untested/unknown shows ⚠️
         const testStatus = getEndpointTestStatus(ep.name);
         let testStatusIcon = '⚠️';
         let testStatusTip = t('endpoints.testTipUnknown');
@@ -189,6 +190,7 @@ export async function renderEndpoints(endpoints) {
                 <h3>
                     <span title="${testStatusTip}" style="cursor: help">${testStatusIcon}</span>
                     ${ep.name}
+                    <span class="priority-badge" title="${t('endpoints.priority')}: ${priority}">P${priority}</span>
                     ${!enabled ? '<span class="disabled-badge">' + t('endpoints.disabled') + '</span>' : ''}
                     ${isCurrentEndpoint ? '<span class="current-badge">' + t('endpoints.current') + '</span>' : ''}
                     ${enabled && !isCurrentEndpoint ? '<button class="btn btn-switch" data-action="switch" data-name="' + ep.name + '">' + t('endpoints.switchTo') + '</button>' : ''}
@@ -472,15 +474,16 @@ export async function checkAllEndpointsOnStartup() {
     }
 }
 
-// 渲染简洁视图
+// Render compact view
 function renderCompactView(sortedEndpoints, container, currentEndpointName) {
     sortedEndpoints.forEach(({ endpoint: ep, originalIndex: index, stats }) => {
         const enabled = ep.enabled !== undefined ? ep.enabled : true;
         const transformer = ep.transformer || 'claude';
         const model = ep.model || '';
         const isCurrentEndpoint = ep.name === currentEndpointName;
+        const priority = (ep.priority >= 1 && ep.priority <= 10) ? ep.priority : 5;
 
-        // 获取测试状态
+        // Get test status
         const testStatus = getEndpointTestStatus(ep.name);
         let testStatusIcon = '⚠️';
         let testStatusTip = t('endpoints.testTipUnknown');
@@ -498,10 +501,10 @@ function renderCompactView(sortedEndpoints, container, currentEndpointName) {
         item.dataset.name = ep.name;
         item.dataset.index = index;
 
-        // 截断 URL 显示
+        // Truncate URL display
         const displayUrl = ep.apiUrl.length > 40 ? ep.apiUrl.substring(0, 40) + '...' : ep.apiUrl;
 
-        // 构建统计详情提示
+        // Build stats tooltip
         const totalTokens = stats.inputTokens + stats.outputTokens;
         let statsTooltip = `${t('endpoints.requests')}: ${stats.requests} | ${t('endpoints.errors')}: ${stats.errors}\n${t('statistics.in')}: ${formatTokens(stats.inputTokens)} | ${t('statistics.out')}: ${formatTokens(stats.outputTokens)}`;
         if (model) {
@@ -519,6 +522,7 @@ function renderCompactView(sortedEndpoints, container, currentEndpointName) {
             </div>
             <span class="compact-status" title="${testStatusTip}" style="cursor: help">${testStatusIcon}</span>
             <span class="compact-name" title="${ep.name}">${ep.name}</span>
+            <span class="compact-priority" title="${t('endpoints.priority')}: ${priority}">P${priority}</span>
             ${isCurrentEndpoint ? '<span class="btn btn-primary compact-badge-btn">' + t('endpoints.current') + '</span>' : (enabled ? '<button class="btn btn-primary compact-badge-btn" data-action="switch" data-name="' + ep.name + '">' + t('endpoints.switchTo') + '</button>' : '<span class="btn btn-primary compact-badge-btn compact-badge-disabled">' + t('endpoints.disabled') + '</span>')}
             <span class="compact-url" title="${ep.apiUrl}"><span class="compact-url-icon">🌐</span>${displayUrl}</span>
             <span class="compact-transformer">🔄 ${transformer}</span>
@@ -539,16 +543,16 @@ function renderCompactView(sortedEndpoints, container, currentEndpointName) {
             </div>
         `;
 
-        // 绑定事件
+        // bindCompactItemEvents
         bindCompactItemEvents(item, index, enabled);
 
-        // 设置拖拽
+        // setupCompactDragAndDrop
         setupCompactDragAndDrop(item, container);
 
         container.appendChild(item);
     });
 
-    // 点击其他地方关闭下拉菜单（先移除旧监听器，避免重复绑定）
+    // Close all dropdowns when clicking outside (remove old listener first to avoid duplicate bindings)
     document.removeEventListener('click', closeAllDropdowns);
     document.addEventListener('click', closeAllDropdowns);
 }

@@ -54,7 +54,8 @@ func normalizeAPIUrl(apiUrl string) string {
 }
 
 // AddEndpoint adds a new endpoint
-func (e *EndpointService) AddEndpoint(name, apiUrl, apiKey, transformer, model, remark string) error {
+// AI Accept: Added priority parameter for endpoint priority-based selection
+func (e *EndpointService) AddEndpoint(name, apiUrl, apiKey, transformer, model, remark string, priority int) error {
     endpoints := e.config.GetEndpoints()
     for _, ep := range endpoints {
         if ep.Name == name {
@@ -64,6 +65,11 @@ func (e *EndpointService) AddEndpoint(name, apiUrl, apiKey, transformer, model, 
 
     if transformer == "" {
         transformer = "claude"
+    }
+
+    // Default priority to 5 if not set or invalid
+    if priority < 1 || priority > 10 {
+        priority = 5
     }
 
     apiUrl = normalizeAPIUrl(apiUrl)
@@ -76,6 +82,7 @@ func (e *EndpointService) AddEndpoint(name, apiUrl, apiKey, transformer, model, 
         Transformer: transformer,
         Model:       model,
         Remark:      remark,
+        Priority:    priority,
     })
 
     e.config.UpdateEndpoints(endpoints)
@@ -138,7 +145,8 @@ func (e *EndpointService) RemoveEndpoint(index int) error {
 }
 
 // UpdateEndpoint updates an endpoint by index
-func (e *EndpointService) UpdateEndpoint(index int, name, apiUrl, apiKey, transformer, model, remark string) error {
+// AI Accept: Added priority parameter for endpoint priority-based selection
+func (e *EndpointService) UpdateEndpoint(index int, name, apiUrl, apiKey, transformer, model, remark string, priority int) error {
     endpoints := e.config.GetEndpoints()
 
     if index < 0 || index >= len(endpoints) {
@@ -161,6 +169,14 @@ func (e *EndpointService) UpdateEndpoint(index int, name, apiUrl, apiKey, transf
         transformer = "claude"
     }
 
+    // Default priority to existing value or 5 if not set or invalid
+    if priority < 1 || priority > 10 {
+        priority = endpoints[index].Priority
+        if priority < 1 || priority > 10 {
+            priority = 5
+        }
+    }
+
     apiUrl = normalizeAPIUrl(apiUrl)
 
     endpoints[index] = config.Endpoint{
@@ -171,6 +187,7 @@ func (e *EndpointService) UpdateEndpoint(index int, name, apiUrl, apiKey, transf
         Transformer: transformer,
         Model:       model,
         Remark:      remark,
+        Priority:    priority,
     }
 
     e.config.UpdateEndpoints(endpoints)
@@ -1008,4 +1025,68 @@ func (e *EndpointService) fetchGeminiModels(apiUrl, apiKey string) ([]string, er
     }
 
     return models, nil
+}
+
+// GetBlacklistStatus returns the blacklist status for all endpoints
+// AI Accept: Added for endpoint blacklist management
+func (e *EndpointService) GetBlacklistStatus() string {
+    if e.storage == nil {
+        result := map[string]interface{}{
+            "success": false,
+            "message": "Storage not available",
+            "data":    []interface{}{},
+        }
+        data, _ := json.Marshal(result)
+        return string(data)
+    }
+
+    blacklist, err := e.storage.GetBlacklistedEndpoints()
+    if err != nil {
+        result := map[string]interface{}{
+            "success": false,
+            "message": fmt.Sprintf("Failed to get blacklist: %v", err),
+            "data":    []interface{}{},
+        }
+        data, _ := json.Marshal(result)
+        return string(data)
+    }
+
+    result := map[string]interface{}{
+        "success": true,
+        "message": fmt.Sprintf("Found %d blacklisted endpoints", len(blacklist)),
+        "data":    blacklist,
+    }
+    data, _ := json.Marshal(result)
+    return string(data)
+}
+
+// RemoveFromBlacklist removes an endpoint from the blacklist
+// AI Accept: Added for manual blacklist management
+func (e *EndpointService) RemoveFromBlacklist(endpointName string) error {
+    if e.storage == nil {
+        return fmt.Errorf("storage not available")
+    }
+
+    if err := e.storage.RemoveFromBlacklist(endpointName); err != nil {
+        return fmt.Errorf("failed to remove from blacklist: %w", err)
+    }
+
+    logger.Info("Endpoint removed from blacklist: %s", endpointName)
+    return nil
+}
+
+// IsEndpointBlacklisted checks if an endpoint is currently blacklisted
+// AI Accept: Added for endpoint blacklist status check
+func (e *EndpointService) IsEndpointBlacklisted(endpointName string) bool {
+    if e.storage == nil {
+        return false
+    }
+
+    isBlacklisted, err := e.storage.IsEndpointBlacklisted(endpointName)
+    if err != nil {
+        logger.Warn("Failed to check blacklist status for %s: %v", endpointName, err)
+        return false
+    }
+
+    return isBlacklisted
 }

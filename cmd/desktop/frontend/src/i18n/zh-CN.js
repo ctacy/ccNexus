@@ -37,12 +37,12 @@ export default {
         testTipSuccess: '已测试连接成功',
         testTipFailed: '测试连接失败或当前端点不支持接口测试',
         testTipUnknown: '未测试或测试结果未知',
-        expand: '展开',
         viewDetail: '默认视图',
         viewCompact: '列表视图',
         dragToReorder: '拖拽排序',
         moreActions: '更多操作',
-        disabled: '已禁用'
+        disabled: '已禁用',
+        priority: '优先级'
     },
     modal: {
         addEndpoint: '添加端点',
@@ -65,6 +65,11 @@ export default {
         modelHelpGemini: '必填：指定要使用的 Gemini 模型',
         remark: '备注',
         remarkHelp: '可选：为此端点添加备注说明',
+        priority: '优先级',
+        priorityHighest: '最高',
+        priorityDefault: '默认',
+        priorityLowest: '最低',
+        priorityHelp: '数字越小优先级越高，请求时优先使用高优先级端点',
         cancel: '取消',
         save: '保存',
         close: '关闭',
@@ -190,7 +195,13 @@ export default {
         save: '保存',
         cancel: '取消',
         saveSuccess: '设置保存成功',
-        saveFailed: '设置保存失败'
+        saveFailed: '设置保存失败',
+        blacklist: '故障转移配置',
+        blacklistThreshold: '黑名单阈值',
+        blacklistThresholdHelp: '端点连续失败多少次后加入黑名单（1-10），默认3次',
+        blacklistDuration: '黑名单时长',
+        blacklistDurationHelp: '端点被加入黑名单后的冷却时间（分钟），默认30分钟',
+        blacklistMinutes: '分钟'
     },
     statistics: {
         title: '统计信息',

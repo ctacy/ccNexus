@@ -320,6 +320,8 @@ type SettingsData struct {
 	AutoDarkTheme             string `json:"autoDarkTheme"`
 	ClaudeNotificationEnabled bool   `json:"claudeNotificationEnabled"`
 	ClaudeNotificationType    string `json:"claudeNotificationType"`
+	BlacklistThreshold        int    `json:"blacklistThreshold"`
+	BlacklistDurationMinutes  int    `json:"blacklistDurationMinutes"`
 }
 
 // SaveSettings saves all settings in a single operation to avoid database lock issues
@@ -373,6 +375,11 @@ func (s *SettingsService) SaveSettings(settingsJSON string) error {
     }
     s.config.UpdateClaudeNotification(settings.ClaudeNotificationEnabled, settings.ClaudeNotificationType)
 
+    // Update blacklist config if provided
+    if settings.BlacklistThreshold > 0 || settings.BlacklistDurationMinutes > 0 {
+        s.config.UpdateBlacklistConfig(settings.BlacklistThreshold, settings.BlacklistDurationMinutes)
+    }
+
     // Save to storage only once
     if s.storage != nil {
         configAdapter := storage.NewConfigStorageAdapter(s.storage)
@@ -390,5 +397,42 @@ func (s *SettingsService) SaveSettings(settingsJSON string) error {
 
     logger.Info("Settings saved: closeWindowBehavior=%s, theme=%s, themeAuto=%v, proxyUrl=%s, claudeNotification=%v",
         settings.CloseWindowBehavior, settings.Theme, settings.ThemeAuto, settings.ProxyURL, settings.ClaudeNotificationEnabled)
+    return nil
+}
+
+// GetBlacklistConfig returns the blacklist configuration as JSON
+// AI Accept: Added for endpoint blacklist configuration management
+func (s *SettingsService) GetBlacklistConfig() string {
+    threshold, durationMinutes := s.config.GetBlacklistConfig()
+    result := map[string]interface{}{
+        "threshold":       threshold,
+        "durationMinutes": durationMinutes,
+    }
+    data, _ := json.Marshal(result)
+    return string(data)
+}
+
+// UpdateBlacklistConfig updates the blacklist configuration
+// AI Accept: Added for endpoint blacklist configuration management
+func (s *SettingsService) UpdateBlacklistConfig(threshold, durationMinutes int) error {
+    // Validate threshold (1-10)
+    if threshold < 1 || threshold > 10 {
+        return fmt.Errorf("invalid threshold: %d (must be 1-10)", threshold)
+    }
+    // Validate duration (1-1440 minutes, i.e., 1 minute to 24 hours)
+    if durationMinutes < 1 || durationMinutes > 1440 {
+        return fmt.Errorf("invalid duration: %d minutes (must be 1-1440)", durationMinutes)
+    }
+
+    s.config.UpdateBlacklistConfig(threshold, durationMinutes)
+
+    if s.storage != nil {
+        configAdapter := storage.NewConfigStorageAdapter(s.storage)
+        if err := s.config.SaveToStorage(configAdapter); err != nil {
+            return fmt.Errorf("failed to save blacklist config: %w", err)
+        }
+    }
+
+    logger.Info("Blacklist config updated: threshold=%d, duration=%d minutes", threshold, durationMinutes)
     return nil
 }

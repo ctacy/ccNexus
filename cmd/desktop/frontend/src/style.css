@@ -1650,6 +1650,33 @@ body {
     top: -1px;
 }
 
+/* Priority badge */
+.priority-badge {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    margin-left: 6px;
+    vertical-align: middle;
+    display: inline-block;
+    position: relative;
+    top: -1px;
+}
+
+/* Compact view priority badge */
+.compact-priority {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    margin-left: 4px;
+    white-space: nowrap;
+}
+
 /* Switch button */
 .btn-switch {
     background: var(--primary-color, #667eea);

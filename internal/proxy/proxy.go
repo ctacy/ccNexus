@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -13,6 +14,14 @@ import (
 	"github.com/lich0821/ccNexus/internal/config"
 	"github.com/lich0821/ccNexus/internal/logger"
 )
+
+// BlacklistStorage defines the interface for blacklist operations
+type BlacklistStorage interface {
+	RecordEndpointFailure(endpointName string, threshold int, durationMinutes int) (bool, error)
+	RecordEndpointSuccess(endpointName string) error
+	IsEndpointBlacklisted(endpointName string) (bool, error)
+	CleanExpiredBlacklist() error
+}
 
 // SSEEvent represents a Server-Sent Event
 type SSEEvent struct {
@@ -33,30 +42,32 @@ type APIResponse struct {
 
 // Proxy represents the proxy server
 type Proxy struct {
-	config           *config.Config
-	stats            *Stats
-	currentIndex     int
-	mu               sync.RWMutex
-	server           *http.Server
-	activeRequests   map[string]bool              // tracks active requests by endpoint name
-	activeRequestsMu sync.RWMutex                 // protects activeRequests map
-	endpointCtx      map[string]context.Context   // context per endpoint for cancellation
-	endpointCancel   map[string]context.CancelFunc // cancel functions per endpoint
-	ctxMu            sync.RWMutex                 // protects context maps
+	config            *config.Config
+	stats             *Stats
+	blacklistStorage  BlacklistStorage            // storage for blacklist operations
+	currentIndex      int
+	mu                sync.RWMutex
+	server            *http.Server
+	activeRequests    map[string]bool             // tracks active requests by endpoint name
+	activeRequestsMu  sync.RWMutex                // protects activeRequests map
+	endpointCtx       map[string]context.Context  // context per endpoint for cancellation
+	endpointCancel    map[string]context.CancelFunc // cancel functions per endpoint
+	ctxMu             sync.RWMutex                // protects context maps
 	onEndpointSuccess func(endpointName string)   // callback when endpoint request succeeds
 }
 
 // New creates a new Proxy instance
-func New(cfg *config.Config, statsStorage StatsStorage, deviceID string) *Proxy {
+func New(cfg *config.Config, statsStorage StatsStorage, deviceID string, blacklistStorage BlacklistStorage) *Proxy {
 	stats := NewStats(statsStorage, deviceID)
 
 	return &Proxy{
-		config:         cfg,
-		stats:          stats,
-		currentIndex:   0,
-		activeRequests: make(map[string]bool),
-		endpointCtx:    make(map[string]context.Context),
-		endpointCancel: make(map[string]context.CancelFunc),
+		config:           cfg,
+		stats:            stats,
+		blacklistStorage: blacklistStorage,
+		currentIndex:     0,
+		activeRequests:   make(map[string]bool),
+		endpointCtx:      make(map[string]context.Context),
+		endpointCancel:   make(map[string]context.CancelFunc),
 	}
 }
 
@@ -116,6 +127,74 @@ func (p *Proxy) getEnabledEndpoints() []config.Endpoint {
 		}
 	}
 	return enabled
+}
+
+// getAvailableEndpointsByPriority returns endpoints sorted by priority (1=highest), excluding blacklisted ones
+func (p *Proxy) getAvailableEndpointsByPriority() []config.Endpoint {
+	endpoints := p.getEnabledEndpoints()
+	available := make([]config.Endpoint, 0, len(endpoints))
+
+	// Filter out blacklisted endpoints
+	for _, ep := range endpoints {
+		if p.blacklistStorage != nil {
+			isBlacklisted, err := p.blacklistStorage.IsEndpointBlacklisted(ep.Name)
+			if err != nil {
+				logger.Warn("[BLACKLIST] Failed to check blacklist status for %s: %v", ep.Name, err)
+			}
+			if isBlacklisted {
+				logger.Debug("[BLACKLIST] Skipping blacklisted endpoint: %s", ep.Name)
+				continue
+			}
+		}
+		available = append(available, ep)
+	}
+
+	// Sort by priority (ascending, 1 is highest)
+	sort.Slice(available, func(i, j int) bool {
+		pi, pj := available[i].Priority, available[j].Priority
+		// Default priority is 5 if not set
+		if pi == 0 {
+			pi = 5
+		}
+		if pj == 0 {
+			pj = 5
+		}
+		return pi < pj
+	})
+
+	return available
+}
+
+// recordEndpointFailure records a failure and returns true if endpoint should be skipped
+func (p *Proxy) recordEndpointFailure(endpointName string) bool {
+	if p.blacklistStorage == nil {
+		return false
+	}
+
+	threshold, durationMinutes := p.config.GetBlacklistConfig()
+	blacklisted, err := p.blacklistStorage.RecordEndpointFailure(endpointName, threshold, durationMinutes)
+	if err != nil {
+		logger.Warn("[BLACKLIST] Failed to record failure for %s: %v", endpointName, err)
+		return false
+	}
+
+	if blacklisted {
+		logger.Warn("[BLACKLIST] Endpoint %s added to blacklist for %d minutes (consecutive failures >= %d)",
+			endpointName, durationMinutes, threshold)
+	}
+
+	return blacklisted
+}
+
+// recordEndpointSuccess records a successful request
+func (p *Proxy) recordEndpointSuccess(endpointName string) {
+	if p.blacklistStorage == nil {
+		return
+	}
+
+	if err := p.blacklistStorage.RecordEndpointSuccess(endpointName); err != nil {
+		logger.Warn("[BLACKLIST] Failed to record success for %s: %v", endpointName, err)
+	}
 }
 
 // getCurrentEndpoint returns the current endpoint (thread-safe)
@@ -289,6 +368,7 @@ func detectClientFormat(path string) ClientFormat {
 }
 
 // handleProxy handles the main proxy logic
+// AI Accept: Priority-based endpoint selection with blacklist support
 func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 	bodyBytes, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -312,31 +392,26 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 	}
 	json.Unmarshal(bodyBytes, &streamReq)
 
-	endpoints := p.getEnabledEndpoints()
+	// Get available endpoints sorted by priority, excluding blacklisted ones
+	endpoints := p.getAvailableEndpointsByPriority()
 	if len(endpoints) == 0 {
-		logger.Error("No enabled endpoints available")
-		http.Error(w, "No enabled endpoints configured", http.StatusServiceUnavailable)
+		// Check if there are enabled endpoints but all are blacklisted
+		enabledEndpoints := p.getEnabledEndpoints()
+		if len(enabledEndpoints) > 0 {
+			logger.Error("All enabled endpoints are blacklisted")
+			http.Error(w, "All endpoints are temporarily unavailable (blacklisted)", http.StatusServiceUnavailable)
+		} else {
+			logger.Error("No enabled endpoints available")
+			http.Error(w, "No enabled endpoints configured", http.StatusServiceUnavailable)
+		}
 		return
 	}
 
-	maxRetries := len(endpoints) * 2
-	endpointAttempts := 0
-	lastEndpointName := ""
+	// Try endpoints in priority order (1 = highest priority)
+	for idx, endpoint := range endpoints {
+		logger.Debug("[PRIORITY] Trying endpoint %s (priority: %d, index: %d/%d)",
+			endpoint.Name, endpoint.Priority, idx+1, len(endpoints))
 
-	for retry := 0; retry < maxRetries; retry++ {
-		endpoint := p.getCurrentEndpoint()
-		if endpoint.Name == "" {
-			http.Error(w, "No enabled endpoints available", http.StatusServiceUnavailable)
-			return
-		}
-
-		// Reset attempts counter if endpoint changed (e.g., manual switch)
-		if lastEndpointName != "" && lastEndpointName != endpoint.Name {
-			endpointAttempts = 0
-		}
-		lastEndpointName = endpoint.Name
-
-		endpointAttempts++
 		p.markRequestActive(endpoint.Name)
 		p.stats.RecordRequest(endpoint.Name)
 
@@ -345,10 +420,7 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 			logger.Error("[%s] %v", endpoint.Name, err)
 			p.stats.RecordError(endpoint.Name)
 			p.markRequestInactive(endpoint.Name)
-			if endpointAttempts >= 2 {
-				p.rotateEndpoint()
-				endpointAttempts = 0
-			}
+			p.recordEndpointFailure(endpoint.Name)
 			continue
 		}
 
@@ -359,10 +431,7 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 			logger.Error("[%s] Failed to transform request: %v", endpoint.Name, err)
 			p.stats.RecordError(endpoint.Name)
 			p.markRequestInactive(endpoint.Name)
-			if endpointAttempts >= 2 {
-				p.rotateEndpoint()
-				endpointAttempts = 0
-			}
+			p.recordEndpointFailure(endpoint.Name)
 			continue
 		}
 
@@ -391,10 +460,7 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 			logger.Error("[%s] Failed to create request: %v", endpoint.Name, err)
 			p.stats.RecordError(endpoint.Name)
 			p.markRequestInactive(endpoint.Name)
-			if endpointAttempts >= 2 {
-				p.rotateEndpoint()
-				endpointAttempts = 0
-			}
+			p.recordEndpointFailure(endpoint.Name)
 			continue
 		}
 
@@ -404,10 +470,7 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 			logger.Error("[%s] Request failed: %v", endpoint.Name, err)
 			p.stats.RecordError(endpoint.Name)
 			p.markRequestInactive(endpoint.Name)
-			if endpointAttempts >= 2 {
-				p.rotateEndpoint()
-				endpointAttempts = 0
-			}
+			p.recordEndpointFailure(endpoint.Name)
 			continue
 		}
 
@@ -424,6 +487,7 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 
 			p.stats.RecordTokens(endpoint.Name, inputTokens, outputTokens)
 			p.markRequestInactive(endpoint.Name)
+			p.recordEndpointSuccess(endpoint.Name) // Clear failure count on success
 			if p.onEndpointSuccess != nil {
 				p.onEndpointSuccess(endpoint.Name)
 			}
@@ -436,6 +500,7 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 			if err == nil {
 				p.stats.RecordTokens(endpoint.Name, inputTokens, outputTokens)
 				p.markRequestInactive(endpoint.Name)
+				p.recordEndpointSuccess(endpoint.Name) // Clear failure count on success
 				if p.onEndpointSuccess != nil {
 					p.onEndpointSuccess(endpoint.Name)
 				}
@@ -460,10 +525,7 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 			logger.DebugLog("[%s] Request failed %d: %s", endpoint.Name, resp.StatusCode, errMsg)
 			p.stats.RecordError(endpoint.Name)
 			p.markRequestInactive(endpoint.Name)
-			if endpointAttempts >= 2 {
-				p.rotateEndpoint()
-				endpointAttempts = 0
-			}
+			p.recordEndpointFailure(endpoint.Name)
 			continue
 		}
 

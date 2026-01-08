@@ -195,7 +195,7 @@ async function loadCurrentSettings() {
 
         // Add event listener for auto checkbox
         if (themeAutoCheckbox) {
-            themeAutoCheckbox.onchange = async function() {
+            themeAutoCheckbox.onchange = async function () {
                 if (themeSelect) {
                     themeSelect.disabled = this.checked;
                 }
@@ -221,6 +221,22 @@ async function loadCurrentSettings() {
 
         if (notificationTypeSelect) {
             notificationTypeSelect.value = claudeNotificationType;
+        }
+
+        // Load blacklist config
+        try {
+            const blacklistConfigStr = await window.go.main.App.GetBlacklistConfig();
+            const blacklistConfig = JSON.parse(blacklistConfigStr);
+            const thresholdSelect = document.getElementById('settingsBlacklistThreshold');
+            const durationInput = document.getElementById('settingsBlacklistDuration');
+            if (thresholdSelect) {
+                thresholdSelect.value = blacklistConfig.threshold || 3;
+            }
+            if (durationInput) {
+                durationInput.value = blacklistConfig.durationMinutes || 30;
+            }
+        } catch (error) {
+            console.error('Failed to load blacklist config:', error);
         }
     } catch (error) {
         console.error('Failed to load settings:', error);
@@ -314,6 +330,10 @@ export async function saveSettings() {
         const claudeNotificationType = document.getElementById('settingsNotificationType').value;
         const claudeNotificationEnabled = claudeNotificationType !== 'disabled';
 
+        // Get blacklist config
+        const blacklistThreshold = parseInt(document.getElementById('settingsBlacklistThreshold').value) || 3;
+        const blacklistDuration = parseInt(document.getElementById('settingsBlacklistDuration').value) || 30;
+
         // Get current config for comparison
         const configStr = await window.go.main.App.GetConfig();
         const config = JSON.parse(configStr);
@@ -328,6 +348,9 @@ export async function saveSettings() {
             claudeNotificationType: claudeNotificationType
         };
         await window.go.main.App.SaveSettings(JSON.stringify(settings));
+
+        // Save blacklist config separately
+        await window.go.main.App.UpdateBlacklistConfig(blacklistThreshold, blacklistDuration);
 
         // Apply theme based on final settings
         stopAutoThemeCheck();

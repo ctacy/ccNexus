@@ -12,8 +12,20 @@ type Endpoint struct {
 	Model       string    `json:"model"`
 	Remark      string    `json:"remark"`
 	SortOrder   int       `json:"sortOrder"`
+	Priority    int       `json:"priority"` // 1-10, 1 is highest priority, default 5
 	CreatedAt   time.Time `json:"createdAt"`
 	UpdatedAt   time.Time `json:"updatedAt"`
+}
+
+// EndpointBlacklist represents blacklist status for an endpoint
+type EndpointBlacklist struct {
+	ID                  int64      `json:"id"`
+	EndpointName        string     `json:"endpointName"`
+	ConsecutiveFailures int        `json:"consecutiveFailures"`
+	BlacklistedAt       *time.Time `json:"blacklistedAt"`
+	ExpiresAt           *time.Time `json:"expiresAt"`
+	CreatedAt           time.Time  `json:"createdAt"`
+	UpdatedAt           time.Time  `json:"updatedAt"`
 }
 
 type DailyStat struct {
@@ -52,6 +64,14 @@ type Storage interface {
 	// Config
 	GetConfig(key string) (string, error)
 	SetConfig(key, value string) error
+
+	// Blacklist
+	RecordEndpointFailure(endpointName string, threshold int, durationMinutes int) (bool, error)
+	RecordEndpointSuccess(endpointName string) error
+	IsEndpointBlacklisted(endpointName string) (bool, error)
+	GetBlacklistedEndpoints() ([]EndpointBlacklist, error)
+	RemoveFromBlacklist(endpointName string) error
+	CleanExpiredBlacklist() error
 
 	// Close
 	Close() error

@@ -361,6 +361,24 @@ export function initUI() {
                         <label>${t('modal.remark')}</label>
                         <input type="text" id="endpointRemark" placeholder="${t('modal.remarkHelp')}">
                     </div>
+                    <div class="form-group">
+                        <label>${t('modal.priority')}</label>
+                        <select id="endpointPriority">
+                            <option value="1">1 (${t('modal.priorityHighest')})</option>
+                            <option value="2">2</option>
+                            <option value="3">3</option>
+                            <option value="4">4</option>
+                            <option value="5" selected>5 (${t('modal.priorityDefault')})</option>
+                            <option value="6">6</option>
+                            <option value="7">7</option>
+                            <option value="8">8</option>
+                            <option value="9">9</option>
+                            <option value="10">10 (${t('modal.priorityLowest')})</option>
+                        </select>
+                        <p style="color: #666; font-size: 12px; margin-top: 5px;">
+                            ${t('modal.priorityHelp')}
+                        </p>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button class="btn btn-secondary" onclick="window.closeModal()">${t('modal.cancel')}</button>
@@ -659,6 +677,36 @@ export function initUI() {
                         </p>
                     </div>
                     <div class="form-group">
+                        <label>${t('settings.blacklist')}</label>
+                        <div style="display: flex; gap: 20px; align-items: flex-start;">
+                            <div style="flex: 1;">
+                                <label style="font-size: 12px; color: var(--text-secondary); margin-bottom: 5px; display: block;">${t('settings.blacklistThreshold')}</label>
+                                <select id="settingsBlacklistThreshold" style="width: 100%;">
+                                    <option value="1">1</option>
+                                    <option value="2">2</option>
+                                    <option value="3">3</option>
+                                    <option value="4">4</option>
+                                    <option value="5">5</option>
+                                    <option value="6">6</option>
+                                    <option value="7">7</option>
+                                    <option value="8">8</option>
+                                    <option value="9">9</option>
+                                    <option value="10">10</option>
+                                </select>
+                            </div>
+                            <div style="flex: 1;">
+                                <label style="font-size: 12px; color: var(--text-secondary); margin-bottom: 5px; display: block;">${t('settings.blacklistDuration')}</label>
+                                <div style="display: flex; align-items: center; gap: 5px;">
+                                    <input type="number" id="settingsBlacklistDuration" min="1" max="1440" value="30" style="flex: 1;">
+                                    <span style="font-size: 12px; color: var(--text-secondary);">${t('settings.blacklistMinutes')}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <p style="color: #666; font-size: 12px; margin-top: 5px;">
+                            ${t('settings.blacklistThresholdHelp')}
+                        </p>
+                    </div>
+                    <div class="form-group">
                         <label><span class="required">*</span>${t('update.autoCheck')}</label>
                         <select id="check-interval">
                             <option value="1">${t('update.everyHour')}</option>
@@ -732,7 +780,7 @@ export function initUI() {
 
 function setupModalEventListeners() {
     // Close modals on background click (endpointModal, portModal, welcomeModal do NOT close on background click)
-     document.getElementById('testResultModal').addEventListener('click', (e) => {
+    document.getElementById('testResultModal').addEventListener('click', (e) => {
         if (e.target.id === 'testResultModal') {
             window.closeTestResultModal();
         }

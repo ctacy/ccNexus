@@ -106,6 +106,7 @@ export function showAddEndpointModal() {
     document.getElementById('endpointTransformer').value = 'claude';
     document.getElementById('endpointModel').value = '';
     document.getElementById('endpointRemark').value = '';
+    document.getElementById('endpointPriority').value = '5';
     handleTransformerChange();
     document.getElementById('endpointModal').classList.add('active');
 }
@@ -125,6 +126,7 @@ export async function editEndpoint(index) {
     document.getElementById('endpointTransformer').value = ep.transformer || 'claude';
     document.getElementById('endpointModel').value = ep.model || '';
     document.getElementById('endpointRemark').value = ep.remark || '';
+    document.getElementById('endpointPriority').value = (ep.priority >= 1 && ep.priority <= 10) ? ep.priority.toString() : '5';
 
     handleTransformerChange();
     document.getElementById('endpointModal').classList.add('active');
@@ -137,6 +139,7 @@ export async function saveEndpoint() {
     const transformer = document.getElementById('endpointTransformer').value;
     const model = document.getElementById('endpointModel').value.trim();
     const remark = document.getElementById('endpointRemark').value.trim();
+    const priority = parseInt(document.getElementById('endpointPriority').value) || 5;
 
     if (!name || !url || !key) {
         showError(t('modal.requiredFields'));
@@ -162,9 +165,9 @@ export async function saveEndpoint() {
 
     try {
         if (currentEditIndex === -1) {
-            await addEndpoint(name, url, key, transformer, model, remark);
+            await addEndpoint(name, url, key, transformer, model, remark, priority);
         } else {
-            await updateEndpoint(currentEditIndex, name, url, key, transformer, model, remark);
+            await updateEndpoint(currentEditIndex, name, url, key, transformer, model, remark, priority);
         }
 
         closeModal();

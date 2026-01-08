@@ -55,7 +55,8 @@ func main() {
     }
 
     statsAdapter := storage.NewStatsStorageAdapter(sqliteStorage)
-    p := proxy.New(cfg, statsAdapter, deviceID)
+    // AI Accept: Pass SQLiteStorage as blacklist storage for priority-based endpoint selection
+    p := proxy.New(cfg, statsAdapter, deviceID, sqliteStorage)
 
     // Create HTTP mux
     mux := http.NewServeMux()

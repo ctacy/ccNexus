@@ -16,6 +16,7 @@ type Endpoint struct {
 	Transformer string `json:"transformer,omitempty"` // Transformer type: claude, openai, gemini, deepseek
 	Model       string `json:"model,omitempty"`       // Target model name for non-Claude APIs
 	Remark      string `json:"remark,omitempty"`      // Optional remark for the endpoint
+	Priority    int    `json:"priority,omitempty"`    // 1-10, 1 is highest priority, default 5
 }
 
 // WebDAVConfig represents WebDAV synchronization configuration
@@ -73,35 +74,39 @@ type ProxyConfig struct {
 
 // Config represents the application configuration
 type Config struct {
-	Port                int             `json:"port"`
-	Endpoints           []Endpoint      `json:"endpoints"`
-	LogLevel            int             `json:"logLevel"`                      // 0=DEBUG, 1=INFO, 2=WARN, 3=ERROR
-	Language            string          `json:"language"`                      // UI language: en, zh-CN
-	Theme               string          `json:"theme"`                         // UI theme: light, dark
-	ThemeAuto           bool            `json:"themeAuto"`                     // Auto switch theme based on time
-	AutoLightTheme      string          `json:"autoLightTheme,omitempty"`      // Theme to use in daytime when auto mode is on
-	AutoDarkTheme       string          `json:"autoDarkTheme,omitempty"`       // Theme to use in nighttime when auto mode is on
-	WindowWidth         int             `json:"windowWidth"`                   // Window width in pixels
-	WindowHeight        int             `json:"windowHeight"`                  // Window height in pixels
+	Port                      int             `json:"port"`
+	Endpoints                 []Endpoint      `json:"endpoints"`
+	LogLevel                  int             `json:"logLevel"`                      // 0=DEBUG, 1=INFO, 2=WARN, 3=ERROR
+	Language                  string          `json:"language"`                      // UI language: en, zh-CN
+	Theme                     string          `json:"theme"`                         // UI theme: light, dark
+	ThemeAuto                 bool            `json:"themeAuto"`                     // Auto switch theme based on time
+	AutoLightTheme            string          `json:"autoLightTheme,omitempty"`      // Theme to use in daytime when auto mode is on
+	AutoDarkTheme             string          `json:"autoDarkTheme,omitempty"`       // Theme to use in nighttime when auto mode is on
+	WindowWidth               int             `json:"windowWidth"`                   // Window width in pixels
+	WindowHeight              int             `json:"windowHeight"`                  // Window height in pixels
 	CloseWindowBehavior       string          `json:"closeWindowBehavior,omitempty"` // "quit", "minimize", "ask"
 	ClaudeNotificationEnabled bool            `json:"claudeNotificationEnabled"`     // Enable Claude Code task completion notification
 	ClaudeNotificationType    string          `json:"claudeNotificationType"`        // Notification type: toast, dialog, disabled
+	BlacklistThreshold        int             `json:"blacklistThreshold,omitempty"`  // Consecutive failures before blacklisting, default 3
+	BlacklistDurationMinutes  int             `json:"blacklistDurationMinutes,omitempty"` // Blacklist duration in minutes, default 30
 	WebDAV                    *WebDAVConfig   `json:"webdav,omitempty"`              // WebDAV synchronization config
-	Backup              *BackupConfig   `json:"backup,omitempty"`              // Backup/sync configuration
-	Update              *UpdateConfig   `json:"update,omitempty"`              // Update configuration
-	Terminal            *TerminalConfig `json:"terminal,omitempty"`            // Terminal launcher config
-	Proxy               *ProxyConfig    `json:"proxy,omitempty"`               // HTTP proxy config
-	mu                  sync.RWMutex
+	Backup                    *BackupConfig   `json:"backup,omitempty"`              // Backup/sync configuration
+	Update                    *UpdateConfig   `json:"update,omitempty"`              // Update configuration
+	Terminal                  *TerminalConfig `json:"terminal,omitempty"`            // Terminal launcher config
+	Proxy                     *ProxyConfig    `json:"proxy,omitempty"`               // HTTP proxy config
+	mu                        sync.RWMutex
 }
 
 // DefaultConfig returns a default configuration
 func DefaultConfig() *Config {
 	return &Config{
-		Port:         3000,
-		LogLevel:     1,       // Default to INFO level
-		Language:     "zh-CN", // Default to Chinese
-		WindowWidth:  1024,    // Default window width
-		WindowHeight: 768,     // Default window height
+		Port:                     3000,
+		LogLevel:                 1,       // Default to INFO level
+		Language:                 "zh-CN", // Default to Chinese
+		WindowWidth:              1024,    // Default window width
+		WindowHeight:             768,     // Default window height
+		BlacklistThreshold:       3,       // Default: 3 consecutive failures to blacklist
+		BlacklistDurationMinutes: 30,      // Default: 30 minutes blacklist duration
 		Endpoints: []Endpoint{
 			{
 				Name:        "Claude Official",
@@ -109,6 +114,7 @@ func DefaultConfig() *Config {
 				APIKey:      "your-api-key-here",
 				Enabled:     true,
 				Transformer: "claude",
+				Priority:    5, // Default priority
 			},
 		},
 		Update: &UpdateConfig{
@@ -398,6 +404,33 @@ func (c *Config) UpdateClaudeNotification(enabled bool, notifType string) {
 	c.ClaudeNotificationType = notifType
 }
 
+// GetBlacklistConfig returns the blacklist configuration (thread-safe)
+func (c *Config) GetBlacklistConfig() (threshold, durationMinutes int) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	threshold = c.BlacklistThreshold
+	durationMinutes = c.BlacklistDurationMinutes
+	if threshold == 0 {
+		threshold = 3
+	}
+	if durationMinutes == 0 {
+		durationMinutes = 30
+	}
+	return threshold, durationMinutes
+}
+
+// UpdateBlacklistConfig updates the blacklist configuration (thread-safe)
+func (c *Config) UpdateBlacklistConfig(threshold, durationMinutes int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if threshold > 0 {
+		c.BlacklistThreshold = threshold
+	}
+	if durationMinutes > 0 {
+		c.BlacklistDurationMinutes = durationMinutes
+	}
+}
+
 // StorageAdapter defines the interface needed for loading/saving config
 type StorageAdapter interface {
 	GetEndpoints() ([]StorageEndpoint, error)
@@ -418,6 +451,7 @@ type StorageEndpoint struct {
 	Model       string
 	Remark      string
 	SortOrder   int
+	Priority    int // 1-10, 1 is highest priority, default 5
 }
 
 // LoadFromStorage loads configuration from SQLite storage
@@ -433,6 +467,10 @@ func LoadFromStorage(storage StorageAdapter) (*Config, error) {
 	}
 
 	for _, ep := range endpoints {
+		priority := ep.Priority
+		if priority == 0 {
+			priority = 5 // Default priority
+		}
 		endpoint := Endpoint{
 			Name:        ep.Name,
 			APIUrl:      ep.APIUrl,
@@ -441,6 +479,7 @@ func LoadFromStorage(storage StorageAdapter) (*Config, error) {
 			Transformer: ep.Transformer,
 			Model:       ep.Model,
 			Remark:      ep.Remark,
+			Priority:    priority,
 		}
 		if endpoint.Transformer == "" {
 			endpoint.Transformer = "claude"
@@ -628,6 +667,20 @@ func LoadFromStorage(storage StorageAdapter) (*Config, error) {
 		config.ClaudeNotificationType = "toast"
 	}
 
+	// Load blacklist config
+	config.BlacklistThreshold = 3       // Default
+	config.BlacklistDurationMinutes = 30 // Default
+	if thresholdStr, err := storage.GetConfig("blacklist_threshold"); err == nil && thresholdStr != "" {
+		if threshold, err := strconv.Atoi(thresholdStr); err == nil && threshold > 0 {
+			config.BlacklistThreshold = threshold
+		}
+	}
+	if durationStr, err := storage.GetConfig("blacklist_duration_minutes"); err == nil && durationStr != "" {
+		if duration, err := strconv.Atoi(durationStr); err == nil && duration > 0 {
+			config.BlacklistDurationMinutes = duration
+		}
+	}
+
 	return config, nil
 }
 
@@ -649,6 +702,10 @@ func (c *Config) SaveToStorage(storage StorageAdapter) error {
 
 	// Save/update endpoints
 	for i, ep := range c.Endpoints {
+		priority := ep.Priority
+		if priority == 0 {
+			priority = 5 // Default priority
+		}
 		endpoint := &StorageEndpoint{
 			Name:        ep.Name,
 			APIUrl:      ep.APIUrl,
@@ -658,6 +715,7 @@ func (c *Config) SaveToStorage(storage StorageAdapter) error {
 			Model:       ep.Model,
 			Remark:      ep.Remark,
 			SortOrder:   i, // Use array index as sort order
+			Priority:    priority,
 		}
 
 		if existingNames[ep.Name] {
@@ -745,6 +803,10 @@ func (c *Config) SaveToStorage(storage StorageAdapter) error {
 	// Save Claude notification config
 	storage.SetConfig("claude_notification_enabled", strconv.FormatBool(c.ClaudeNotificationEnabled))
 	storage.SetConfig("claude_notification_type", c.ClaudeNotificationType)
+
+	// Save blacklist config
+	storage.SetConfig("blacklist_threshold", strconv.Itoa(c.BlacklistThreshold))
+	storage.SetConfig("blacklist_duration_minutes", strconv.Itoa(c.BlacklistDurationMinutes))
 
 	return nil
 }

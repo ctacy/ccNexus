@@ -37,12 +37,12 @@ export default {
         testTipSuccess: 'Connection test passed',
         testTipFailed: 'Connection test failed or endpoint does not support API testing',
         testTipUnknown: 'Not tested or test result unknown',
-        expand: 'Expand',
         viewDetail: 'Default Mode',
         viewCompact: 'List Mode',
         dragToReorder: 'Drag to Reorder',
         moreActions: 'More Actions',
-        disabled: 'Off'
+        disabled: 'Off',
+        priority: 'Priority'
     },
     modal: {
         addEndpoint: 'Add Endpoint',
@@ -65,6 +65,11 @@ export default {
         modelHelpGemini: 'Required: Specify the Gemini model to use',
         remark: 'Remark',
         remarkHelp: 'Optional: Add a remark for this endpoint',
+        priority: 'Priority',
+        priorityHighest: 'Highest',
+        priorityDefault: 'Default',
+        priorityLowest: 'Lowest',
+        priorityHelp: 'Lower number = higher priority. Higher priority endpoints are used first',
         cancel: 'Cancel',
         save: 'Save',
         close: 'Close',
@@ -190,7 +195,13 @@ export default {
         save: 'Save',
         cancel: 'Cancel',
         saveSuccess: 'Settings saved successfully',
-        saveFailed: 'Failed to save settings'
+        saveFailed: 'Failed to save settings',
+        blacklist: 'Failover Configuration',
+        blacklistThreshold: 'Blacklist Threshold',
+        blacklistThresholdHelp: 'Number of consecutive failures before blacklisting an endpoint (1-10), default 3',
+        blacklistDuration: 'Blacklist Duration',
+        blacklistDurationHelp: 'Cooldown time after an endpoint is blacklisted (minutes), default 30 minutes',
+        blacklistMinutes: 'min'
     },
     statistics: {
         title: 'Statistics',
