@@ -13,6 +13,19 @@
 
 </div>
 
+# 1. 拉取原作者最新代码
+git fetch upstream
+git checkout main
+git merge upstream/main
+
+# 2. 将你的定制 rebase 到最新代码
+git checkout my-custom
+git rebase main
+
+# 3. 推送更新后的定制分支
+git push origin my-custom --force-with-lease
+
+
 ## 功能特性
 
 - **多端点轮换**：自动故障转移，一个失败自动切换下一个
