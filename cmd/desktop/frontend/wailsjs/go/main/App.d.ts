@@ -51,6 +51,8 @@ export function GetAutoDarkTheme():Promise<string>;
 
 export function GetAutoLightTheme():Promise<string>;
 
+export function GetAutostart():Promise<boolean>;
+
 export function GetBlacklistConfig():Promise<string>;
 
 export function GetBlacklistStatus():Promise<string>;
@@ -158,6 +160,8 @@ export function SendUpdateNotification(arg1:string,arg2:string):Promise<void>;
 export function SetAutoDarkTheme(arg1:string):Promise<void>;
 
 export function SetAutoLightTheme(arg1:string):Promise<void>;
+
+export function SetAutostart(arg1:boolean):Promise<void>;
 
 export function SetCloseWindowBehavior(arg1:string):Promise<void>;
 

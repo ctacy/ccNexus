@@ -102,6 +102,10 @@ export function GetAutoLightTheme() {
   return window['go']['main']['App']['GetAutoLightTheme']();
 }
 
+export function GetAutostart() {
+  return window['go']['main']['App']['GetAutostart']();
+}
+
 export function GetBlacklistConfig() {
   return window['go']['main']['App']['GetBlacklistConfig']();
 }
@@ -316,6 +320,10 @@ export function SetAutoDarkTheme(arg1) {
 
 export function SetAutoLightTheme(arg1) {
   return window['go']['main']['App']['SetAutoLightTheme'](arg1);
+}
+
+export function SetAutostart(arg1) {
+  return window['go']['main']['App']['SetAutostart'](arg1);
 }
 
 export function SetCloseWindowBehavior(arg1) {

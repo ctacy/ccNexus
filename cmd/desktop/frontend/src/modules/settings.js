@@ -238,6 +238,17 @@ async function loadCurrentSettings() {
         } catch (error) {
             console.error('Failed to load blacklist config:', error);
         }
+
+        // Load autostart setting
+        try {
+            const autostartEnabled = await window.go.main.App.GetAutostart();
+            const autostartCheckbox = document.getElementById('settingsAutostart');
+            if (autostartCheckbox) {
+                autostartCheckbox.checked = autostartEnabled;
+            }
+        } catch (error) {
+            console.error('Failed to load autostart config:', error);
+        }
     } catch (error) {
         console.error('Failed to load settings:', error);
     }
@@ -351,6 +362,10 @@ export async function saveSettings() {
 
         // Save blacklist config separately
         await window.go.main.App.UpdateBlacklistConfig(blacklistThreshold, blacklistDuration);
+
+        // Save autostart setting
+        const autostartEnabled = document.getElementById('settingsAutostart').checked;
+        await window.go.main.App.SetAutostart(autostartEnabled);
 
         // Apply theme based on final settings
         stopAutoThemeCheck();

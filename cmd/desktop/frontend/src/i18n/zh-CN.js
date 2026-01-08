@@ -201,7 +201,9 @@ export default {
         blacklistThresholdHelp: '端点连续失败多少次后加入黑名单（1-10），默认3次',
         blacklistDuration: '黑名单时长',
         blacklistDurationHelp: '端点被加入黑名单后的冷却时间（分钟），默认30分钟',
-        blacklistMinutes: '分钟'
+        blacklistMinutes: '分钟',
+        autostart: '开机启动',
+        autostartHelp: '开启后，系统启动时自动运行 ccNexus'
     },
     statistics: {
         title: '统计信息',

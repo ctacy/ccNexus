@@ -719,6 +719,16 @@ export function initUI() {
                             ${t('update.autoCheckHelp')}
                         </p>
                     </div>
+                    <div class="form-group">
+                        <label>${t('settings.autostart')}</label>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <label class="toggle-switch" style="width: 40px; height: 20px;">
+                                <input type="checkbox" id="settingsAutostart">
+                                <span class="toggle-slider" style="border-radius: 20px;"></span>
+                            </label>
+                            <span style="font-size: 13px; color: var(--text-secondary);">${t('settings.autostartHelp')}</span>
+                        </div>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button class="btn btn-secondary" onclick="window.closeSettingsModal()">${t('settings.cancel')}</button>

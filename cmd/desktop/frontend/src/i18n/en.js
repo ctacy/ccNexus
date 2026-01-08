@@ -201,7 +201,9 @@ export default {
         blacklistThresholdHelp: 'Number of consecutive failures before blacklisting an endpoint (1-10), default 3',
         blacklistDuration: 'Blacklist Duration',
         blacklistDurationHelp: 'Cooldown time after an endpoint is blacklisted (minutes), default 30 minutes',
-        blacklistMinutes: 'min'
+        blacklistMinutes: 'min',
+        autostart: 'Start on Boot',
+        autostartHelp: 'Automatically run ccNexus when system starts'
     },
     statistics: {
         title: 'Statistics',
