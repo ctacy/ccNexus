@@ -169,7 +169,7 @@ export async function renderEndpoints(endpoints) {
         const priority = (ep.priority >= 1 && ep.priority <= 10) ? ep.priority : 5;
 
         const item = document.createElement('div');
-        item.className = 'endpoint-item';
+        item.className = 'endpoint-item' + (isCurrentEndpoint ? ' current-endpoint' : '');
         item.draggable = true;
         item.dataset.name = ep.name;
         item.dataset.index = index;
@@ -496,7 +496,7 @@ function renderCompactView(sortedEndpoints, container, currentEndpointName) {
         }
 
         const item = document.createElement('div');
-        item.className = 'endpoint-item-compact';
+        item.className = 'endpoint-item-compact' + (isCurrentEndpoint ? ' current-endpoint' : '');
         item.draggable = true;
         item.dataset.name = ep.name;
         item.dataset.index = index;
