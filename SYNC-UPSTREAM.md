@@ -82,3 +82,11 @@ git cherry-pick --continue
 # 6. 推送新分支
 git push origin my-custom-v2
 ```
+
+
+
+# 进入 desktop 目录
+cd cmd/desktop
+
+# 构建当前平台（生产版本）
+wails build
