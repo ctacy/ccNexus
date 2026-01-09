@@ -25,38 +25,10 @@ function hideCheckUpdateBadge() {
     document.getElementById('checkUpdateBadge')?.classList.remove('show');
 }
 
-// Check for updates on startup
+// Check for updates on startup - DISABLED for custom build
 export async function checkUpdatesOnStartup() {
-    try {
-        const unviewedVersion = localStorage.getItem('unviewedUpdateVersion');
-        if (unviewedVersion) {
-            showUpdateBadge();
-        }
-
-        const settingsStr = await GetUpdateSettings();
-        const settings = JSON.parse(settingsStr);
-
-        if (settings.checkInterval === 0) {
-            stopAutoCheck();
-            return;
-        }
-
-        if (settings.lastCheckTime) {
-            const lastCheck = new Date(settings.lastCheckTime);
-            const now = new Date();
-            const hoursSinceCheck = (now - lastCheck) / (1000 * 60 * 60);
-
-            if (hoursSinceCheck < settings.checkInterval) {
-                startAutoCheck(settings.checkInterval);
-                return;
-            }
-        }
-
-        await checkForUpdates(true);
-        startAutoCheck(settings.checkInterval);
-    } catch (error) {
-        console.error('[Updater] Failed to check updates on startup:', error);
-    }
+    // 禁用自动检查更新
+    stopAutoCheck();
 }
 
 // Start automatic update checking
@@ -77,50 +49,11 @@ function stopAutoCheck() {
     }
 }
 
-// Check for updates manually
+// Check for updates manually - DISABLED for custom build
 export async function checkForUpdates(silent = false) {
-    // 只有手动点击检查更新时才隐藏红点
+    // 自定义构建版本不支持在线更新
     if (!silent) {
-        hideCheckUpdateBadge();
-        hideAboutBadge();
-    }
-    try {
-        const resultStr = await CheckForUpdates();
-        const result = JSON.parse(resultStr);
-
-        if (!result.success) {
-            if (!silent) {
-                showNotification(t('update.checkFailed') + ': ' + result.error, 'error');
-            }
-            return;
-        }
-
-        const info = result.info;
-
-        if (info.hasUpdate) {
-            const settingsStr = await GetUpdateSettings();
-            const settings = JSON.parse(settingsStr);
-
-            if (settings.skippedVersion === info.latestVersion) {
-                return;
-            }
-
-            // 自动检查只显示红点，手动检查才弹窗
-            if (silent) {
-                showUpdateBadge(info.latestVersion);
-            } else {
-                showUpdateNotification(info);
-            }
-        } else {
-            if (!silent) {
-                showNotification(t('update.upToDate'), 'success');
-            }
-        }
-    } catch (error) {
-        console.error('[Updater] Failed to check for updates:', error);
-        if (!silent) {
-            showNotification(t('update.checkFailed') + ': ' + error.message, 'error');
-        }
+        showNotification('不支持在线更新', 'warning');
     }
 }
 
