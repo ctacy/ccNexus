@@ -18,10 +18,12 @@ func normalizeAPIUrl(apiUrl string) string {
 }
 
 // shouldRetry determines if a response should trigger a retry
+// Only BadRequest (400) is considered a terminal error that shouldn't retry
+// Other errors like 401 (Unauthorized) should retry because it likely means
+// the endpoint's API key is invalid, not the user's request
 func shouldRetry(statusCode int) bool {
 	return statusCode != http.StatusOK &&
-		statusCode != http.StatusBadRequest &&
-		statusCode != http.StatusUnauthorized
+		statusCode != http.StatusBadRequest
 }
 
 // cleanIncompleteToolCalls removes incomplete tool_use blocks from request

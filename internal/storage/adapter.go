@@ -30,6 +30,7 @@ func (a *ConfigStorageAdapter) GetEndpoints() ([]config.StorageEndpoint, error) 
 			Model:       ep.Model,
 			Remark:      ep.Remark,
 			SortOrder:   ep.SortOrder,
+			Priority:    ep.Priority,
 		}
 	}
 	return result, nil
@@ -46,6 +47,7 @@ func (a *ConfigStorageAdapter) SaveEndpoint(ep *config.StorageEndpoint) error {
 		Model:       ep.Model,
 		Remark:      ep.Remark,
 		SortOrder:   ep.SortOrder,
+		Priority:    ep.Priority,
 	}
 	return a.storage.SaveEndpoint(endpoint)
 }
@@ -61,6 +63,7 @@ func (a *ConfigStorageAdapter) UpdateEndpoint(ep *config.StorageEndpoint) error 
 		Model:       ep.Model,
 		Remark:      ep.Remark,
 		SortOrder:   ep.SortOrder,
+		Priority:    ep.Priority,
 	}
 	return a.storage.UpdateEndpoint(endpoint)
 }

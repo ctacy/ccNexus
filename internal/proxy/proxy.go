@@ -137,7 +137,7 @@ func (p *Proxy) getAvailableEndpointsByPriority() []config.Endpoint {
 				logger.Warn("[BLACKLIST] Failed to check blacklist status for %s: %v", ep.Name, err)
 			}
 			if isBlacklisted {
-				logger.Debug("[BLACKLIST] Skipping blacklisted endpoint: %s", ep.Name)
+				logger.Warn("[BLACKLIST] Skipping blacklisted endpoint: %s", ep.Name)
 				continue
 			}
 		}
@@ -156,6 +156,11 @@ func (p *Proxy) getAvailableEndpointsByPriority() []config.Endpoint {
 		}
 		return pi < pj
 	})
+
+	// Log endpoint counts for debugging
+	if len(endpoints) != len(available) {
+		logger.Warn("[ENDPOINT] Enabled: %d, Available (after blacklist filter): %d", len(endpoints), len(available))
+	}
 
 	return available
 }
