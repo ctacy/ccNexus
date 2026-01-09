@@ -575,6 +575,14 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 			}
 			logger.Warn("[%s] Response %d: %s", endpoint.Name, resp.StatusCode, errMsg)
 			logger.DebugLog("[%s] Response %d: %s", endpoint.Name, resp.StatusCode, errMsg)
+
+			// Special handling for 400 errors that should still retry
+			if resp.StatusCode == http.StatusBadRequest && shouldRetryBadRequest(string(respBody)) {
+				logger.Warn("[%s] 400 error contains retryable content, trying next endpoint", endpoint.Name)
+				p.stats.RecordError(endpoint.Name)
+				p.recordEndpointFailure(endpoint.Name)
+				continue
+			}
 		}
 		// Remove Content-Encoding header since we've decompressed
 		for key, values := range resp.Header {

@@ -26,6 +26,16 @@ func shouldRetry(statusCode int) bool {
 		statusCode != http.StatusBadRequest
 }
 
+// shouldRetryBadRequest checks if a 400 error should still trigger a retry
+// Some 400 errors are endpoint-specific issues that might work on other endpoints
+func shouldRetryBadRequest(responseBody string) bool {
+	// tool_use/tool_result mismatch errors - some endpoints handle this differently
+	if strings.Contains(responseBody, "tool_use") && strings.Contains(responseBody, "tool_result") {
+		return true
+	}
+	return false
+}
+
 // cleanIncompleteToolCalls removes incomplete tool_use blocks from request
 func cleanIncompleteToolCalls(bodyBytes []byte) ([]byte, error) {
 	var req map[string]interface{}
