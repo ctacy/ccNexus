@@ -112,7 +112,7 @@ func (p *Proxy) UpdateConfig(cfg *config.Config) error {
 	// Save current endpoint name
 	var currentEndpointName string
 	if p.config != nil {
-		endpoints := p.getEnabledEndpoints()
+		endpoints := p.getEnabledEndpointsNoLock()
 		if len(endpoints) > 0 && p.currentIndex < len(endpoints) {
 			currentEndpointName = endpoints[p.currentIndex].Name
 		}
@@ -121,7 +121,7 @@ func (p *Proxy) UpdateConfig(cfg *config.Config) error {
 	p.config = cfg
 
 	// Try to find the previous current endpoint in new config
-	newEndpoints := p.getEnabledEndpoints()
+	newEndpoints := p.getEnabledEndpointsNoLock()
 	if currentEndpointName != "" && len(newEndpoints) > 0 {
 		found := false
 		for i, ep := range newEndpoints {

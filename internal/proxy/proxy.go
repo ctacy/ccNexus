@@ -44,16 +44,16 @@ type APIResponse struct {
 type Proxy struct {
 	config            *config.Config
 	stats             *Stats
-	blacklistStorage  BlacklistStorage            // storage for blacklist operations
+	blacklistStorage  BlacklistStorage // storage for blacklist operations
 	currentIndex      int
 	mu                sync.RWMutex
 	server            *http.Server
-	activeRequests    map[string]bool             // tracks active requests by endpoint name
-	activeRequestsMu  sync.RWMutex                // protects activeRequests map
-	endpointCtx       map[string]context.Context  // context per endpoint for cancellation
+	activeRequests    map[string]bool               // tracks active requests by endpoint name
+	activeRequestsMu  sync.RWMutex                  // protects activeRequests map
+	endpointCtx       map[string]context.Context    // context per endpoint for cancellation
 	endpointCancel    map[string]context.CancelFunc // cancel functions per endpoint
-	ctxMu             sync.RWMutex                // protects context maps
-	onEndpointSuccess func(endpointName string)   // callback when endpoint request succeeds
+	ctxMu             sync.RWMutex                  // protects context maps
+	onEndpointSuccess func(endpointName string)     // callback when endpoint request succeeds
 }
 
 // New creates a new Proxy instance
@@ -117,16 +117,11 @@ func (p *Proxy) Stop() error {
 	return nil
 }
 
-// getEnabledEndpoints returns only the enabled endpoints
+// getEnabledEndpoints returns only the enabled endpoints (thread-safe)
 func (p *Proxy) getEnabledEndpoints() []config.Endpoint {
-	allEndpoints := p.config.GetEndpoints()
-	enabled := make([]config.Endpoint, 0)
-	for _, ep := range allEndpoints {
-		if ep.Enabled {
-			enabled = append(enabled, ep)
-		}
-	}
-	return enabled
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.getEnabledEndpointsNoLock()
 }
 
 // getAvailableEndpointsByPriority returns endpoints sorted by priority (1=highest), excluding blacklisted ones
@@ -272,7 +267,7 @@ func (p *Proxy) rotateEndpoint() config.Endpoint {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	endpoints := p.getEnabledEndpoints()
+	endpoints := p.getEnabledEndpointsNoLock()
 	if len(endpoints) == 0 {
 		return config.Endpoint{}
 	}
@@ -296,7 +291,7 @@ func (p *Proxy) rotateEndpoint() config.Endpoint {
 		p.mu.Lock() // Re-acquire lock
 
 		// Re-fetch endpoints after re-acquiring lock (may have changed)
-		endpoints = p.getEnabledEndpoints()
+		endpoints = p.getEnabledEndpointsNoLock()
 		if len(endpoints) == 0 {
 			return config.Endpoint{}
 		}
@@ -324,7 +319,7 @@ func (p *Proxy) SetCurrentEndpoint(targetName string) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	endpoints := p.getEnabledEndpoints()
+	endpoints := p.getEnabledEndpointsNoLock()
 	if len(endpoints) == 0 {
 		return fmt.Errorf("no enabled endpoints")
 	}
@@ -344,6 +339,35 @@ func (p *Proxy) SetCurrentEndpoint(targetName string) error {
 	}
 
 	return fmt.Errorf("endpoint '%s' not found or not enabled", targetName)
+}
+
+// updateCurrentIndex updates the currentIndex to point to the given endpoint name
+// This is used to keep the UI in sync with the last successful endpoint
+func (p *Proxy) updateCurrentIndex(name string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	endpoints := p.getEnabledEndpointsNoLock()
+	for i, ep := range endpoints {
+		if ep.Name == name {
+			if p.currentIndex != i {
+				p.currentIndex = i
+				logger.Debug("[INDEX] Updated current index to %d for endpoint %s", p.currentIndex+1, name)
+			}
+			return
+		}
+	}
+}
+
+func (p *Proxy) getEnabledEndpointsNoLock() []config.Endpoint {
+	allEndpoints := p.config.GetEndpoints()
+	enabled := make([]config.Endpoint, 0)
+	for _, ep := range allEndpoints {
+		if ep.Enabled {
+			enabled = append(enabled, ep)
+		}
+	}
+	return enabled
 }
 
 // ClientFormat represents the API format used by the client
@@ -501,6 +525,7 @@ func (p *Proxy) handleProxy(w http.ResponseWriter, r *http.Request) {
 				p.stats.RecordTokens(endpoint.Name, inputTokens, outputTokens)
 				p.markRequestInactive(endpoint.Name)
 				p.recordEndpointSuccess(endpoint.Name) // Clear failure count on success
+				p.updateCurrentIndex(endpoint.Name)
 				if p.onEndpointSuccess != nil {
 					p.onEndpointSuccess(endpoint.Name)
 				}
