@@ -246,11 +246,19 @@ export async function renderEndpoints(endpoints) {
     container.innerHTML = '';
 
     const endpointStats = getEndpointStats();
-    // Display endpoints in config file order (no sorting by enabled status)
+    // Sort endpoints: enabled first, then by priority ascending (P1 > P2 > ... > P10)
     const sortedEndpoints = endpoints.map((ep, index) => {
         const stats = endpointStats[ep.name] || { requests: 0, errors: 0, inputTokens: 0, outputTokens: 0 };
         const enabled = ep.enabled !== undefined ? ep.enabled : true;
-        return { endpoint: ep, originalIndex: index, stats, enabled };
+        const priority = (ep.priority >= 1 && ep.priority <= 10) ? ep.priority : 5;
+        return { endpoint: ep, originalIndex: index, stats, enabled, priority };
+    }).sort((a, b) => {
+        // First sort by enabled status (enabled first)
+        if (a.enabled !== b.enabled) {
+            return a.enabled ? -1 : 1;
+        }
+        // Then sort by priority ascending (lower priority number = higher priority)
+        return a.priority - b.priority;
     });
 
     // 检查视图模式
