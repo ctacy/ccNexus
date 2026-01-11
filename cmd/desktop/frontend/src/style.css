@@ -1661,6 +1661,92 @@ body {
     top: -1px;
 }
 
+/* Blacklist badge */
+.blacklist-badge {
+    background: linear-gradient(135deg, #ff4757 0%, #c0392b 100%);
+    color: white;
+    padding: 3px 7px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: normal;
+    margin-left: 8px;
+    vertical-align: middle;
+    display: inline-block;
+    position: relative;
+    top: -1px;
+    animation: blacklist-pulse 2s ease-in-out infinite;
+}
+
+@keyframes blacklist-pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.8;
+    }
+}
+
+/* Blacklist remove button */
+.btn-blacklist-remove {
+    background: transparent;
+    border: 1px solid #ff4757;
+    color: #ff4757;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: bold;
+    margin-left: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+    vertical-align: middle;
+    display: inline-block;
+    position: relative;
+    top: -1px;
+}
+
+.btn-blacklist-remove:hover {
+    background: #ff4757;
+    color: white;
+}
+
+/* Compact view blacklist badge */
+.compact-blacklist-badge {
+    background: linear-gradient(135deg, #ff4757 0%, #c0392b 100%);
+    color: white;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    margin-left: 4px;
+    white-space: nowrap;
+    animation: blacklist-pulse 2s ease-in-out infinite;
+}
+
+/* Compact view blacklist remove button */
+.btn-blacklist-remove-compact {
+    background: transparent;
+    border: 1px solid #ff4757;
+    color: #ff4757;
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: bold;
+    margin-left: 2px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-blacklist-remove-compact:hover {
+    background: #ff4757;
+    color: white;
+}
+
+/* Blacklisted endpoint item style */
+.endpoint-item.blacklisted,
+.endpoint-item-compact.blacklisted {
+    border-left: 3px solid #ff4757;
+}
+
 /* Priority badge */
 .priority-badge {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);

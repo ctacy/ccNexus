@@ -120,8 +120,92 @@ export function setTestState(button, index) {
     currentTestIndex = index;
 }
 
+// 黑名单状态缓存
+let blacklistStatusCache = {};
+let blacklistCountdownTimers = {};
+
+// 格式化倒计时显示
+function formatCountdown(seconds) {
+    if (seconds <= 0) return '';
+    const minutes = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    if (minutes > 0) {
+        return `${minutes}m ${secs}s`;
+    }
+    return `${secs}s`;
+}
+
+// 更新黑名单倒计时显示
+function updateBlacklistCountdown(endpointName, expiresAt) {
+    const countdownElement = document.querySelector(`[data-blacklist-countdown="${endpointName}"]`);
+    if (!countdownElement) return;
+
+    const now = new Date().getTime();
+    const expiresTime = new Date(expiresAt).getTime();
+    const remainingSeconds = Math.floor((expiresTime - now) / 1000);
+
+    if (remainingSeconds <= 0) {
+        // 黑名单已过期，刷新页面
+        if (window.loadConfig) {
+            window.loadConfig();
+        }
+        return;
+    }
+
+    countdownElement.textContent = formatCountdown(remainingSeconds);
+}
+
+// 启动黑名单倒计时定时器
+function startBlacklistCountdownTimer(endpointName, expiresAt) {
+    // 清除之前的定时器
+    if (blacklistCountdownTimers[endpointName]) {
+        clearInterval(blacklistCountdownTimers[endpointName]);
+    }
+
+    // 立即更新一次
+    updateBlacklistCountdown(endpointName, expiresAt);
+
+    // 每秒更新
+    blacklistCountdownTimers[endpointName] = setInterval(() => {
+        updateBlacklistCountdown(endpointName, expiresAt);
+    }, 1000);
+}
+
+// 清除所有黑名单倒计时定时器
+function clearAllBlacklistCountdownTimers() {
+    for (const timer of Object.values(blacklistCountdownTimers)) {
+        clearInterval(timer);
+    }
+    blacklistCountdownTimers = {};
+}
+
+// 解除端点黑名单
+async function removeFromBlacklist(endpointName) {
+    try {
+        await window.go.main.App.RemoveFromBlacklist(endpointName);
+        // 立即从前端缓存中删除该端点的黑名单状态
+        delete blacklistStatusCache[endpointName];
+        // 清除该端点的倒计时定时器
+        if (blacklistCountdownTimers[endpointName]) {
+            clearInterval(blacklistCountdownTimers[endpointName]);
+            delete blacklistCountdownTimers[endpointName];
+        }
+        console.log('[Blacklist] Removed from local cache:', endpointName);
+        // 刷新页面
+        if (window.loadConfig) {
+            window.loadConfig();
+        }
+    } catch (error) {
+        console.error('Failed to remove from blacklist:', error);
+        alert('Failed to remove from blacklist: ' + error);
+    }
+}
+
 export async function renderEndpoints(endpoints) {
     const container = document.getElementById('endpointList');
+
+    // 清除旧的倒计时定时器
+    clearAllBlacklistCountdownTimers();
 
     // Get current endpoint from backend
     let currentEndpointName = '';
@@ -129,6 +213,25 @@ export async function renderEndpoints(endpoints) {
         currentEndpointName = await window.go.main.App.GetCurrentEndpoint();
     } catch (error) {
         console.error('Failed to get current endpoint:', error);
+    }
+
+    // Get blacklist status from backend
+    try {
+        const blacklistJson = await window.go.main.App.GetBlacklistStatus();
+        console.log('[Blacklist] Raw response:', blacklistJson);
+        const blacklistResult = JSON.parse(blacklistJson);
+        if (blacklistResult.success && blacklistResult.data) {
+            blacklistStatusCache = {};
+            for (const bl of blacklistResult.data) {
+                blacklistStatusCache[bl.endpointName] = {
+                    blacklistedAt: bl.blacklistedAt,
+                    expiresAt: bl.expiresAt
+                };
+            }
+            console.log('[Blacklist] Cache updated:', blacklistStatusCache);
+        }
+    } catch (error) {
+        console.error('Failed to get blacklist status:', error);
     }
 
     if (endpoints.length === 0) {
@@ -185,6 +288,10 @@ export async function renderEndpoints(endpoints) {
             testStatusTip = t('endpoints.testTipFailed');
         }
 
+        // 获取黑名单状态
+        const blacklistInfo = blacklistStatusCache[ep.name];
+        const isBlacklisted = !!blacklistInfo;
+
         item.innerHTML = `
             <div class="endpoint-info">
                 <h3>
@@ -192,6 +299,7 @@ export async function renderEndpoints(endpoints) {
                     ${ep.name}
                     <span class="priority-badge" title="${t('endpoints.priority')}: ${priority}">P${priority}</span>
                     ${!enabled ? '<span class="disabled-badge">' + t('endpoints.disabled') + '</span>' : ''}
+                    ${isBlacklisted ? '<span class="blacklist-badge">🚫 ' + t('endpoints.blacklisted') + ' (<span data-blacklist-countdown="' + ep.name + '"></span>)</span> <button class="btn-blacklist-remove" data-remove-blacklist="' + ep.name + '" title="' + t('endpoints.blacklistRemoveNow') + '">✕</button>' : ''}
                     ${isCurrentEndpoint ? '<span class="current-badge">' + t('endpoints.current') + '</span>' : ''}
                     ${enabled && !isCurrentEndpoint ? '<button class="btn btn-switch" data-action="switch" data-name="' + ep.name + '">' + t('endpoints.switchTo') + '</button>' : ''}
                 </h3>
@@ -212,6 +320,15 @@ export async function renderEndpoints(endpoints) {
                 <button class="btn-card btn-danger" data-action="delete" data-index="${index}">${t('endpoints.delete')}</button>
             </div>
         `;
+
+        // 如果是黑名单状态，启动倒计时
+        if (isBlacklisted && blacklistInfo.expiresAt) {
+            // 延迟启动以确保 DOM 已渲染
+            setTimeout(() => {
+                startBlacklistCountdownTimer(ep.name, blacklistInfo.expiresAt);
+            }, 0);
+        }
+
 
         const testBtn = item.querySelector('[data-action="test"]');
         const editBtn = item.querySelector('[data-action="edit"]');
@@ -274,6 +391,15 @@ export async function renderEndpoints(endpoints) {
                         switchBtn.innerHTML = t('endpoints.switchTo');
                     }
                 }
+            });
+        }
+
+        // Add remove from blacklist button event listener
+        const removeBlacklistBtn = item.querySelector('[data-remove-blacklist]');
+        if (removeBlacklistBtn) {
+            removeBlacklistBtn.addEventListener('click', async () => {
+                const name = removeBlacklistBtn.getAttribute('data-remove-blacklist');
+                await removeFromBlacklist(name);
             });
         }
 
@@ -441,6 +567,19 @@ export function initEndpointSuccessListener() {
     }
 }
 
+// 初始化端点黑名单事件监听
+export function initEndpointBlacklistListener() {
+    if (window.runtime && window.runtime.EventsOn) {
+        window.runtime.EventsOn('endpoint:blacklisted', (endpointName) => {
+            console.log('Endpoint blacklisted:', endpointName);
+            // 刷新端点列表显示以更新黑名单状态
+            if (window.loadConfig) {
+                window.loadConfig();
+            }
+        });
+    }
+}
+
 // 清除所有端点测试状态
 export function clearAllEndpointTestStatus() {
     try {
@@ -495,8 +634,12 @@ function renderCompactView(sortedEndpoints, container, currentEndpointName) {
             testStatusTip = t('endpoints.testTipFailed');
         }
 
+        // 获取黑名单状态
+        const blacklistInfo = blacklistStatusCache[ep.name];
+        const isBlacklisted = !!blacklistInfo;
+
         const item = document.createElement('div');
-        item.className = 'endpoint-item-compact' + (isCurrentEndpoint ? ' current-endpoint' : '');
+        item.className = 'endpoint-item-compact' + (isCurrentEndpoint ? ' current-endpoint' : '') + (isBlacklisted ? ' blacklisted' : '');
         item.draggable = true;
         item.dataset.name = ep.name;
         item.dataset.index = index;
@@ -514,6 +657,10 @@ function renderCompactView(sortedEndpoints, container, currentEndpointName) {
             statsTooltip += `\n${t('modal.remark')}: ${ep.remark}`;
         }
 
+        // 黑名单标记 HTML
+        const blacklistBadgeHtml = isBlacklisted ?
+            `<span class="compact-blacklist-badge" title="${t('endpoints.blacklisted')}">🚫 <span data-blacklist-countdown="${ep.name}"></span></span><button class="btn-blacklist-remove-compact" data-remove-blacklist="${ep.name}" title="${t('endpoints.blacklistRemoveNow')}">✕</button>` : '';
+
         item.innerHTML = `
             <div class="drag-handle" title="${t('endpoints.dragToReorder')}">
                 <div class="drag-handle-dots"><span></span><span></span></div>
@@ -523,6 +670,7 @@ function renderCompactView(sortedEndpoints, container, currentEndpointName) {
             <span class="compact-status" title="${testStatusTip}" style="cursor: help">${testStatusIcon}</span>
             <span class="compact-name" title="${ep.name}">${ep.name}</span>
             <span class="compact-priority" title="${t('endpoints.priority')}: ${priority}">P${priority}</span>
+            ${blacklistBadgeHtml}
             ${isCurrentEndpoint ? '<span class="btn btn-primary compact-badge-btn">' + t('endpoints.current') + '</span>' : (enabled ? '<button class="btn btn-primary compact-badge-btn" data-action="switch" data-name="' + ep.name + '">' + t('endpoints.switchTo') + '</button>' : '<span class="btn btn-primary compact-badge-btn compact-badge-disabled">' + t('endpoints.disabled') + '</span>')}
             <span class="compact-url" title="${ep.apiUrl}"><span class="compact-url-icon">🌐</span>${displayUrl}</span>
             <span class="compact-transformer">🔄 ${transformer}</span>
@@ -542,6 +690,14 @@ function renderCompactView(sortedEndpoints, container, currentEndpointName) {
                 </div>
             </div>
         `;
+
+        // 如果是黑名单状态，启动倒计时
+        if (isBlacklisted && blacklistInfo.expiresAt) {
+            // 延迟启动以确保 DOM 已渲染
+            setTimeout(() => {
+                startBlacklistCountdownTimer(ep.name, blacklistInfo.expiresAt);
+            }, 0);
+        }
 
         // bindCompactItemEvents
         bindCompactItemEvents(item, index, enabled);
@@ -639,6 +795,15 @@ function bindCompactItemEvents(item, index, enabled) {
         const idx = parseInt(deleteBtn.getAttribute('data-index'));
         window.deleteEndpoint(idx);
     });
+
+    // 解除黑名单按钮
+    const removeBlacklistBtn = item.querySelector('[data-remove-blacklist]');
+    if (removeBlacklistBtn) {
+        removeBlacklistBtn.addEventListener('click', async () => {
+            const name = removeBlacklistBtn.getAttribute('data-remove-blacklist');
+            await removeFromBlacklist(name);
+        });
+    }
 }
 
 // 关闭所有下拉菜单

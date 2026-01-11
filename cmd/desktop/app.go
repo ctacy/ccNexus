@@ -128,6 +128,10 @@ func (a *App) startup(ctx context.Context) {
 		runtime.EventsEmit(ctx, "endpoint:success", endpointName)
 	})
 
+	a.proxy.SetOnEndpointBlacklisted(func(endpointName string) {
+		runtime.EventsEmit(ctx, "endpoint:blacklisted", endpointName)
+	})
+
 	// Initialize services
 	version := a.GetVersion()
 	a.stats = service.NewStatsService(a.proxy, a.config)

@@ -42,7 +42,10 @@ export default {
         dragToReorder: 'Drag to Reorder',
         moreActions: 'More Actions',
         disabled: 'Off',
-        priority: 'Priority'
+        priority: 'Priority',
+        blacklisted: 'Blacklisted',
+        blacklistCountdown: 'Unblock in',
+        blacklistRemoveNow: 'Remove from Blacklist'
     },
     modal: {
         addEndpoint: 'Add Endpoint',

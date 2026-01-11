@@ -42,18 +42,19 @@ type APIResponse struct {
 
 // Proxy represents the proxy server
 type Proxy struct {
-	config            *config.Config
-	stats             *Stats
-	blacklistStorage  BlacklistStorage // storage for blacklist operations
-	currentIndex      int
-	mu                sync.RWMutex
-	server            *http.Server
-	activeRequests    map[string]bool               // tracks active requests by endpoint name
-	activeRequestsMu  sync.RWMutex                  // protects activeRequests map
-	endpointCtx       map[string]context.Context    // context per endpoint for cancellation
-	endpointCancel    map[string]context.CancelFunc // cancel functions per endpoint
-	ctxMu             sync.RWMutex                  // protects context maps
-	onEndpointSuccess func(endpointName string)     // callback when endpoint request succeeds
+	config                *config.Config
+	stats                 *Stats
+	blacklistStorage      BlacklistStorage // storage for blacklist operations
+	currentIndex          int
+	mu                    sync.RWMutex
+	server                *http.Server
+	activeRequests        map[string]bool               // tracks active requests by endpoint name
+	activeRequestsMu      sync.RWMutex                  // protects activeRequests map
+	endpointCtx           map[string]context.Context    // context per endpoint for cancellation
+	endpointCancel        map[string]context.CancelFunc // cancel functions per endpoint
+	ctxMu                 sync.RWMutex                  // protects context maps
+	onEndpointSuccess     func(endpointName string)     // callback when endpoint request succeeds
+	onEndpointBlacklisted func(endpointName string)     // callback when endpoint is added to blacklist
 }
 
 // New creates a new Proxy instance
@@ -74,6 +75,11 @@ func New(cfg *config.Config, statsStorage StatsStorage, deviceID string, blackli
 // SetOnEndpointSuccess sets the callback for successful endpoint requests
 func (p *Proxy) SetOnEndpointSuccess(callback func(endpointName string)) {
 	p.onEndpointSuccess = callback
+}
+
+// SetOnEndpointBlacklisted sets the callback for when an endpoint is added to blacklist
+func (p *Proxy) SetOnEndpointBlacklisted(callback func(endpointName string)) {
+	p.onEndpointBlacklisted = callback
 }
 
 // Start starts the proxy server
@@ -181,6 +187,10 @@ func (p *Proxy) recordEndpointFailure(endpointName string) bool {
 	if blacklisted {
 		logger.Warn("[BLACKLIST] Endpoint %s added to blacklist for %d minutes (consecutive failures >= %d)",
 			endpointName, durationMinutes, threshold)
+		// Notify frontend about blacklist change
+		if p.onEndpointBlacklisted != nil {
+			p.onEndpointBlacklisted(endpointName)
+		}
 	}
 
 	return blacklisted

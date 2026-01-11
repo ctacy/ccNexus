@@ -832,8 +832,8 @@ func (s *SQLiteStorage) RecordEndpointFailure(endpointName string, threshold int
 
 	// Try to get existing record
 	var failures int
-	var blacklistedAt sql.NullTime
-	err := s.db.QueryRow(`SELECT consecutive_failures, blacklisted_at FROM endpoint_blacklist WHERE endpoint_name = ?`, endpointName).Scan(&failures, &blacklistedAt)
+	var blacklistedAt, expiresAt sql.NullTime
+	err := s.db.QueryRow(`SELECT consecutive_failures, blacklisted_at, expires_at FROM endpoint_blacklist WHERE endpoint_name = ?`, endpointName).Scan(&failures, &blacklistedAt, &expiresAt)
 
 	if err == sql.ErrNoRows {
 		// First failure, create new record
@@ -849,15 +849,22 @@ func (s *SQLiteStorage) RecordEndpointFailure(endpointName string, threshold int
 		return true, nil
 	}
 
+	// Check if in cooldown period (blacklisted_at is NULL but expires_at is in the future)
+	// This happens after manual removal from blacklist
+	if !blacklistedAt.Valid && expiresAt.Valid && now.Before(expiresAt.Time) {
+		// In cooldown period, don't count failures
+		return false, nil
+	}
+
 	// Increment failure count
 	failures++
 	shouldBlacklist := failures >= threshold
 
 	if shouldBlacklist {
 		// Add to blacklist
-		expiresAt := now.Add(time.Duration(durationMinutes) * time.Minute)
+		newExpiresAt := now.Add(time.Duration(durationMinutes) * time.Minute)
 		_, err = s.db.Exec(`UPDATE endpoint_blacklist SET consecutive_failures = ?, blacklisted_at = ?, expires_at = ?, updated_at = ? WHERE endpoint_name = ?`,
-			failures, now, expiresAt, now, endpointName)
+			failures, now, newExpiresAt, now, endpointName)
 	} else {
 		// Just update failure count
 		_, err = s.db.Exec(`UPDATE endpoint_blacklist SET consecutive_failures = ?, updated_at = ? WHERE endpoint_name = ?`,
@@ -936,11 +943,37 @@ func (s *SQLiteStorage) GetBlacklistedEndpoints() ([]EndpointBlacklist, error) {
 }
 
 // RemoveFromBlacklist manually removes an endpoint from the blacklist
+// It sets a 1-minute cooldown period to prevent immediate re-blacklisting
 func (s *SQLiteStorage) RemoveFromBlacklist(endpointName string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	_, err := s.db.Exec(`DELETE FROM endpoint_blacklist WHERE endpoint_name = ?`, endpointName)
+	now := time.Now()
+	// Set cooldown for 10 seconds - during this time the endpoint won't be re-blacklisted
+	cooldownEnd := now.Add(10 * time.Second)
+
+	// Reset the record: clear blacklist status but keep a cooldown period
+	// consecutive_failures is reset to 0, blacklisted_at is cleared
+	// expires_at is set to cooldown end time to track cooldown period
+	result, err := s.db.Exec(`
+		UPDATE endpoint_blacklist 
+		SET consecutive_failures = 0, 
+		    blacklisted_at = NULL, 
+		    expires_at = ?, 
+		    updated_at = ? 
+		WHERE endpoint_name = ?`,
+		cooldownEnd, now, endpointName)
+
+	if err != nil {
+		return err
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		// Record doesn't exist, delete it completely if it exists with different conditions
+		_, err = s.db.Exec(`DELETE FROM endpoint_blacklist WHERE endpoint_name = ?`, endpointName)
+	}
+
 	return err
 }
 
