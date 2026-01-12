@@ -5,7 +5,7 @@ import { setLanguage } from './i18n/index.js'
 import { initUI, changeLanguage } from './modules/ui.js'
 import { loadConfig } from './modules/config.js'
 import { loadStats, switchStatsPeriod, loadStatsByPeriod, getCurrentPeriod } from './modules/stats.js'
-import { renderEndpoints, toggleEndpointPanel, initEndpointSuccessListener, initEndpointBlacklistListener, checkAllEndpointsOnStartup, switchEndpointViewMode, initEndpointViewMode, isDropdownOpen } from './modules/endpoints.js'
+import { renderEndpoints, toggleEndpointPanel, initEndpointSuccessListener, initEndpointBlacklistListener, checkAllEndpointsOnStartup, switchEndpointViewMode, initEndpointViewMode, isDropdownOpen, isUserInteracting } from './modules/endpoints.js'
 import { loadLogs, toggleLogPanel, changeLogLevel, copyLogs, clearLogs } from './modules/logs.js'
 import { showDataSyncDialog } from './modules/webdav.js'
 import { initTips } from './modules/tips.js'
@@ -114,8 +114,8 @@ window.addEventListener('DOMContentLoaded', async () => {
         await loadStats(); // Refresh cumulative stats for endpoint cards
         const currentPeriod = getCurrentPeriod(); // Get current selected period
         await loadStatsByPeriod(currentPeriod); // Refresh period stats (daily/weekly/monthly)
-        // 如果下拉菜单打开，跳过渲染避免菜单消失
-        if (isDropdownOpen()) {
+        // 如果用户正在与端点列表交互（包括下拉菜单、拖拽、开关操作等），跳过渲染避免干扰
+        if (isUserInteracting()) {
             return;
         }
         const config = await window.go.main.App.GetConfig();

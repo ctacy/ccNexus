@@ -81,6 +81,10 @@ let currentTestButtonOriginalText = '';
 let currentTestIndex = -1;
 let endpointPanelExpanded = true;
 
+// 用户交互状态跟踪 - 当用户正在与端点列表交互时，阻止定时刷新
+let userInteracting = false;
+let userInteractingTimeout = null;
+
 function copyToClipboard(text, button) {
     navigator.clipboard.writeText(text).then(() => {
         const originalHTML = button.innerHTML;
@@ -363,6 +367,7 @@ export async function renderEndpoints(endpoints) {
             window.deleteEndpoint(idx);
         });
         toggleSwitch.addEventListener('change', async (e) => {
+            setUserInteracting(true); // 阻止定时刷新
             const idx = parseInt(e.target.getAttribute('data-index'));
             const newEnabled = e.target.checked;
             try {
@@ -740,6 +745,7 @@ function bindCompactItemEvents(item, index, enabled) {
 
     // 启用/禁用开关
     toggleSwitch.addEventListener('change', async (e) => {
+        setUserInteracting(true); // 阻止定时刷新
         const idx = parseInt(e.target.getAttribute('data-index'));
         const newEnabled = e.target.checked;
         try {
@@ -824,6 +830,26 @@ function closeAllDropdowns() {
 // 检查是否有下拉菜单正在显示
 export function isDropdownOpen() {
     return document.querySelectorAll('.compact-more-menu.show').length > 0;
+}
+
+// 检查用户是否正在与端点列表交互
+export function isUserInteracting() {
+    return userInteracting || isDropdownOpen() || draggedElement !== null;
+}
+
+// 设置用户交互状态（带自动重置）
+export function setUserInteracting(interacting, duration = 2000) {
+    if (userInteractingTimeout) {
+        clearTimeout(userInteractingTimeout);
+        userInteractingTimeout = null;
+    }
+    userInteracting = interacting;
+    if (interacting && duration > 0) {
+        // 自动在指定时间后重置状态
+        userInteractingTimeout = setTimeout(() => {
+            userInteracting = false;
+        }, duration);
+    }
 }
 
 // 拖拽占位符元素
