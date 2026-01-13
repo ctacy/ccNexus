@@ -83,6 +83,10 @@ window.addEventListener('DOMContentLoaded', async () => {
         console.error('Failed to get version:', error);
     }
 
+    // Display build time (更新此时间戳来标记构建时间)
+    const BUILD_TIME = '2026-01-12 18:16';
+    document.getElementById('buildTime').textContent = `(${BUILD_TIME})`;
+
     // Load initial data
     await loadConfigAndRender();
     loadStatsByPeriod('daily'); // Load today's stats by default
@@ -109,19 +113,13 @@ window.addEventListener('DOMContentLoaded', async () => {
     // Check all endpoints on startup (zero-cost methods only)
     checkAllEndpointsOnStartup();
 
-    // Refresh stats every 3 seconds
+    // Refresh stats every 3 seconds (只刷新统计数据，不重建端点列表DOM)
     setInterval(async () => {
         await loadStats(); // Refresh cumulative stats for endpoint cards
         const currentPeriod = getCurrentPeriod(); // Get current selected period
         await loadStatsByPeriod(currentPeriod); // Refresh period stats (daily/weekly/monthly)
-        // 如果用户正在与端点列表交互（包括下拉菜单、拖拽、开关操作等），跳过渲染避免干扰
-        if (isUserInteracting()) {
-            return;
-        }
-        const config = await window.go.main.App.GetConfig();
-        if (config) {
-            renderEndpoints(JSON.parse(config).endpoints);
-        }
+        // 注意：不再调用 renderEndpoints，避免频繁重建DOM导致界面频闪和交互中断
+        // 端点列表的刷新只在用户操作（添加、删除、编辑、切换等）时触发
     }, 3000);
 
     // Refresh logs every 2 seconds

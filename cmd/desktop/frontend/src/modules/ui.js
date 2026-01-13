@@ -296,6 +296,7 @@ export function initUI() {
                 <div class="footer-right">
                     <span style="opacity: 0.7; margin-right: 5px;">v</span>
                     <span id="appVersion" style="font-weight: 500;">1.0.0</span>
+                    <span style="opacity: 0.5; margin-left: 8px; font-size: 11px;" id="buildTime"></span>
                 </div>
             </div>
         </div>

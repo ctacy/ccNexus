@@ -572,10 +572,7 @@ export function initEndpointSuccessListener() {
         window.runtime.EventsOn('endpoint:success', (endpointName) => {
             // 更新测试状态为成功
             saveEndpointTestStatus(endpointName, true);
-            // 刷新端点列表显示
-            if (window.loadConfig) {
-                window.loadConfig();
-            }
+            // 注意：不再自动刷新端点列表，避免频繁刷新导致界面频闪
         });
     }
 }
@@ -585,10 +582,7 @@ export function initEndpointBlacklistListener() {
     if (window.runtime && window.runtime.EventsOn) {
         window.runtime.EventsOn('endpoint:blacklisted', (endpointName) => {
             console.log('Endpoint blacklisted:', endpointName);
-            // 刷新端点列表显示以更新黑名单状态
-            if (window.loadConfig) {
-                window.loadConfig();
-            }
+            // 注意：不再自动刷新端点列表，避免频繁刷新导致界面频闪
         });
     }
 }
