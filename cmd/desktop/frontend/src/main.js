@@ -5,7 +5,7 @@ import { setLanguage } from './i18n/index.js'
 import { initUI, changeLanguage } from './modules/ui.js'
 import { loadConfig } from './modules/config.js'
 import { loadStats, switchStatsPeriod, loadStatsByPeriod, getCurrentPeriod } from './modules/stats.js'
-import { renderEndpoints, toggleEndpointPanel, initEndpointSuccessListener, initEndpointBlacklistListener, checkAllEndpointsOnStartup, switchEndpointViewMode, initEndpointViewMode, isDropdownOpen, isUserInteracting } from './modules/endpoints.js'
+import { renderEndpoints, toggleEndpointPanel, initEndpointSuccessListener, initEndpointBlacklistListener, checkAllEndpointsOnStartup, switchEndpointViewMode, initEndpointViewMode, isDropdownOpen, isUserInteracting, updateEndpointStats } from './modules/endpoints.js'
 import { loadLogs, toggleLogPanel, changeLogLevel, copyLogs, clearLogs } from './modules/logs.js'
 import { showDataSyncDialog } from './modules/webdav.js'
 import { initTips } from './modules/tips.js'
@@ -84,7 +84,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
 
     // Display build time (更新此时间戳来标记构建时间)
-    const BUILD_TIME = '2026-01-12 18:16';
+    const BUILD_TIME = '2026-01-13 14:26';
     document.getElementById('buildTime').textContent = `(${BUILD_TIME})`;
 
     // Load initial data
@@ -113,13 +113,13 @@ window.addEventListener('DOMContentLoaded', async () => {
     // Check all endpoints on startup (zero-cost methods only)
     checkAllEndpointsOnStartup();
 
-    // Refresh stats every 3 seconds (只刷新统计数据，不重建端点列表DOM)
+    // Refresh stats every 3 seconds (刷新统计数据并增量更新端点卡片)
     setInterval(async () => {
         await loadStats(); // Refresh cumulative stats for endpoint cards
         const currentPeriod = getCurrentPeriod(); // Get current selected period
         await loadStatsByPeriod(currentPeriod); // Refresh period stats (daily/weekly/monthly)
-        // 注意：不再调用 renderEndpoints，避免频繁重建DOM导致界面频闪和交互中断
-        // 端点列表的刷新只在用户操作（添加、删除、编辑、切换等）时触发
+        // 增量更新端点卡片上的统计数据（不重建DOM）
+        updateEndpointStats();
     }, 3000);
 
     // Refresh logs every 2 seconds

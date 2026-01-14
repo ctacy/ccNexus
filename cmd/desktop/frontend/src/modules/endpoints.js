@@ -318,8 +318,8 @@ export async function renderEndpoints(endpoints) {
                 <p style="display: flex; align-items: center; gap: 8px; min-width: 0;"><span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">🌐 ${ep.apiUrl}</span> <button class="copy-btn" data-copy="${ep.apiUrl}" aria-label="${t('endpoints.copy')}" title="${t('endpoints.copy')}"><svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" width="1em" height="1em"><path d="M7 4c0-1.1.9-2 2-2h11a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2h-1V8c0-2-1-3-3-3H7V4Z" fill="currentColor"></path><path d="M5 7a2 2 0 0 0-2 2v10c0 1.1.9 2 2 2h10a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2H5Z" fill="currentColor"></path></svg></button></p>
                 <p style="display: flex; align-items: center; gap: 8px; min-width: 0;"><span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">🔑 ${maskApiKey(ep.apiKey)}</span> <button class="copy-btn" data-copy="${ep.apiKey}" aria-label="${t('endpoints.copy')}" title="${t('endpoints.copy')}"><svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" width="1em" height="1em"><path d="M7 4c0-1.1.9-2 2-2h11a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2h-1V8c0-2-1-3-3-3H7V4Z" fill="currentColor"></path><path d="M5 7a2 2 0 0 0-2 2v10c0 1.1.9 2 2 2h10a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2H5Z" fill="currentColor"></path></svg></button></p>
                 <p style="color: #666; font-size: 14px; margin-top: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">🔄 ${t('endpoints.transformer')}: ${transformer}${model ? ` (${model})` : ''}</p>
-                <p style="color: #666; font-size: 14px; margin-top: 3px;">📊 ${t('endpoints.requests')}: ${stats.requests} | ${t('endpoints.errors')}: ${stats.errors}</p>
-                <p style="color: #666; font-size: 14px; margin-top: 3px;">🎯 ${t('endpoints.tokens')}: ${formatTokens(totalTokens)} (${t('statistics.in')}: ${formatTokens(stats.inputTokens)}, ${t('statistics.out')}: ${formatTokens(stats.outputTokens)})</p>
+                <p style="color: #666; font-size: 14px; margin-top: 3px;" data-stat-requests="${ep.name}">📊 ${t('endpoints.requests')}: ${stats.requests} | ${t('endpoints.errors')}: ${stats.errors}</p>
+                <p style="color: #666; font-size: 14px; margin-top: 3px;" data-stat-tokens="${ep.name}">🎯 ${t('endpoints.tokens')}: ${formatTokens(totalTokens)} (${t('statistics.in')}: ${formatTokens(stats.inputTokens)}, ${t('statistics.out')}: ${formatTokens(stats.outputTokens)})</p>
                 ${ep.remark ? `<p style="color: #888; font-size: 13px; margin-top: 5px; font-style: italic;" title="${ep.remark}">💬 ${ep.remark.length > 20 ? ep.remark.substring(0, 20) + '...' : ep.remark}</p>` : ''}
             </div>
             <div class="endpoint-actions">
@@ -681,7 +681,7 @@ function renderCompactView(sortedEndpoints, container, currentEndpointName) {
             ${isCurrentEndpoint ? '<span class="btn btn-primary compact-badge-btn">' + t('endpoints.current') + '</span>' : (enabled ? '<button class="btn btn-primary compact-badge-btn" data-action="switch" data-name="' + ep.name + '">' + t('endpoints.switchTo') + '</button>' : '<span class="btn btn-primary compact-badge-btn compact-badge-disabled">' + t('endpoints.disabled') + '</span>')}
             <span class="compact-url" title="${ep.apiUrl}"><span class="compact-url-icon">🌐</span>${displayUrl}</span>
             <span class="compact-transformer">🔄 ${transformer}</span>
-            <span class="compact-stats" title="${statsTooltip}">📊 ${stats.requests} | 🎯 ${formatTokens(stats.inputTokens + stats.outputTokens)}</span>
+            <span class="compact-stats" title="${statsTooltip}" data-stat-compact="${ep.name}">📊 ${stats.requests} | 🎯 ${formatTokens(stats.inputTokens + stats.outputTokens)}</span>
             <div class="compact-actions">
                 <label class="toggle-switch">
                     <input type="checkbox" data-index="${index}" ${enabled ? 'checked' : ''}>
@@ -1068,5 +1068,150 @@ async function handleContainerDrop(e) {
             alert(t('endpoints.reorderFailed') + ': ' + error);
             window.loadConfig();
         }
+    }
+}
+
+// 增量更新端点统计数据（不重建DOM）
+export async function updateEndpointStats() {
+    const endpointStats = getEndpointStats();
+
+    // 获取当前端点名称
+    let currentEndpointName = '';
+    try {
+        currentEndpointName = await window.go.main.App.GetCurrentEndpoint();
+    } catch (error) {
+        console.error('Failed to get current endpoint:', error);
+    }
+
+    // 更新详细视图的统计数据
+    document.querySelectorAll('[data-stat-requests]').forEach(el => {
+        const name = el.getAttribute('data-stat-requests');
+        const stats = endpointStats[name] || { requests: 0, errors: 0 };
+        el.textContent = `📊 ${t('endpoints.requests')}: ${stats.requests} | ${t('endpoints.errors')}: ${stats.errors}`;
+    });
+
+    document.querySelectorAll('[data-stat-tokens]').forEach(el => {
+        const name = el.getAttribute('data-stat-tokens');
+        const stats = endpointStats[name] || { inputTokens: 0, outputTokens: 0 };
+        const totalTokens = (stats.inputTokens || 0) + (stats.outputTokens || 0);
+        el.textContent = `🎯 ${t('endpoints.tokens')}: ${formatTokens(totalTokens)} (${t('statistics.in')}: ${formatTokens(stats.inputTokens || 0)}, ${t('statistics.out')}: ${formatTokens(stats.outputTokens || 0)})`;
+    });
+
+    // 更新简洁视图的统计数据
+    document.querySelectorAll('[data-stat-compact]').forEach(el => {
+        const name = el.getAttribute('data-stat-compact');
+        const stats = endpointStats[name] || { requests: 0, inputTokens: 0, outputTokens: 0 };
+        const totalTokens = (stats.inputTokens || 0) + (stats.outputTokens || 0);
+        el.textContent = `📊 ${stats.requests} | 🎯 ${formatTokens(totalTokens)}`;
+
+        // 更新 tooltip
+        const tooltipLines = [
+            `${t('endpoints.requests')}: ${stats.requests} | ${t('endpoints.errors')}: ${stats.errors || 0}`,
+            `${t('statistics.in')}: ${formatTokens(stats.inputTokens || 0)} | ${t('statistics.out')}: ${formatTokens(stats.outputTokens || 0)}`
+        ];
+        el.title = tooltipLines.join('\n');
+    });
+
+    // 更新当前端点高亮状态（详细视图和简洁视图）
+    if (currentEndpointName) {
+        // 详细视图
+        document.querySelectorAll('.endpoint-item').forEach(item => {
+            const name = item.dataset.name;
+            const isCurrentEndpoint = name === currentEndpointName;
+
+            // 更新 current-endpoint class
+            item.classList.toggle('current-endpoint', isCurrentEndpoint);
+
+            // 更新标题区域的当前标签和切换按钮
+            const h3 = item.querySelector('h3');
+            if (h3) {
+                // 移除旧的当前标签
+                const oldCurrentBadge = h3.querySelector('.current-badge');
+                if (oldCurrentBadge) oldCurrentBadge.remove();
+
+                // 移除旧的切换按钮
+                const oldSwitchBtn = h3.querySelector('.btn-switch');
+                if (oldSwitchBtn) oldSwitchBtn.remove();
+
+                // 根据是否是当前端点添加相应元素
+                const checkbox = item.querySelector('input[type="checkbox"]');
+                const enabled = checkbox ? checkbox.checked : true;
+
+                if (isCurrentEndpoint) {
+                    const currentBadge = document.createElement('span');
+                    currentBadge.className = 'current-badge';
+                    currentBadge.textContent = t('endpoints.current');
+                    h3.appendChild(currentBadge);
+                } else if (enabled) {
+                    const switchBtn = document.createElement('button');
+                    switchBtn.className = 'btn btn-switch';
+                    switchBtn.setAttribute('data-action', 'switch');
+                    switchBtn.setAttribute('data-name', name);
+                    switchBtn.textContent = t('endpoints.switchTo');
+                    switchBtn.addEventListener('click', async () => {
+                        try {
+                            switchBtn.disabled = true;
+                            switchBtn.innerHTML = '⏳';
+                            await window.go.main.App.SwitchToEndpoint(name);
+                            window.loadConfig();
+                        } catch (error) {
+                            console.error('Failed to switch endpoint:', error);
+                            alert(t('endpoints.switchFailed') + ': ' + error);
+                        }
+                    });
+                    h3.appendChild(switchBtn);
+                }
+            }
+        });
+
+        // 简洁视图
+        document.querySelectorAll('.endpoint-item-compact').forEach(item => {
+            const name = item.dataset.name;
+            const isCurrentEndpoint = name === currentEndpointName;
+
+            // 更新 current-endpoint class
+            item.classList.toggle('current-endpoint', isCurrentEndpoint);
+
+            // 更新按钮显示
+            const badgeBtn = item.querySelector('.compact-badge-btn');
+            if (badgeBtn) {
+                const checkbox = item.querySelector('input[type="checkbox"]');
+                const enabled = checkbox ? checkbox.checked : true;
+
+                if (isCurrentEndpoint) {
+                    // 显示"当前"标签
+                    badgeBtn.textContent = t('endpoints.current');
+                    badgeBtn.classList.remove('compact-badge-disabled');
+                    if (badgeBtn.tagName === 'BUTTON') {
+                        // 替换为 span
+                        const span = document.createElement('span');
+                        span.className = 'btn btn-primary compact-badge-btn';
+                        span.textContent = t('endpoints.current');
+                        badgeBtn.replaceWith(span);
+                    }
+                } else if (enabled) {
+                    // 显示"切换"按钮
+                    if (badgeBtn.tagName === 'SPAN') {
+                        const button = document.createElement('button');
+                        button.className = 'btn btn-primary compact-badge-btn';
+                        button.setAttribute('data-action', 'switch');
+                        button.setAttribute('data-name', name);
+                        button.textContent = t('endpoints.switchTo');
+                        button.addEventListener('click', async () => {
+                            try {
+                                button.disabled = true;
+                                button.innerHTML = '⏳';
+                                await window.go.main.App.SwitchToEndpoint(name);
+                                window.loadConfig();
+                            } catch (error) {
+                                console.error('Failed to switch endpoint:', error);
+                                alert(t('endpoints.switchFailed') + ': ' + error);
+                            }
+                        });
+                        badgeBtn.replaceWith(button);
+                    }
+                }
+            }
+        });
     }
 }
