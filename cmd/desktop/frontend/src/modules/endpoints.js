@@ -577,12 +577,25 @@ export function initEndpointSuccessListener() {
     }
 }
 
+// 黑名单事件防抖定时器
+let blacklistRefreshTimeout = null;
+
 // 初始化端点黑名单事件监听
 export function initEndpointBlacklistListener() {
     if (window.runtime && window.runtime.EventsOn) {
         window.runtime.EventsOn('endpoint:blacklisted', (endpointName) => {
-            console.log('Endpoint blacklisted:', endpointName);
-            // 注意：不再自动刷新端点列表，避免频繁刷新导致界面频闪
+            console.log('[Blacklist] Endpoint blacklisted event received:', endpointName);
+            // 使用防抖机制避免频繁刷新：500ms 内只刷新一次
+            if (blacklistRefreshTimeout) {
+                clearTimeout(blacklistRefreshTimeout);
+            }
+            blacklistRefreshTimeout = setTimeout(() => {
+                if (window.loadConfig) {
+                    console.log('[Blacklist] Refreshing endpoint list to show blacklist badge');
+                    window.loadConfig();
+                }
+                blacklistRefreshTimeout = null;
+            }, 500);
         });
     }
 }
