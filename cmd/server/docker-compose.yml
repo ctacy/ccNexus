@@ -6,7 +6,7 @@ services:
     container_name: ccnexus
     restart: unless-stopped
     ports:
-      - "3021:3000"
+      - "23001:3000"
     volumes:
       - /data/ccnexus/:/data
     environment:
