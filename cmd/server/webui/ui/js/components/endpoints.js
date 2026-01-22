@@ -2,6 +2,7 @@ import { api } from '../api.js';
 import { state } from '../state.js';
 import { notifications } from '../utils/notifications.js';
 import { getTransformerLabel, getStatusBadge } from '../utils/formatters.js';
+import { t } from '../i18n/index.js';
 
 class Endpoints {
     constructor() {
@@ -15,9 +16,9 @@ class Endpoints {
         this.container.innerHTML = `
             <div class="endpoints">
                 <div class="flex-between mb-3">
-                    <h1>Endpoints</h1>
+                    <h1>${t('endpoints.title')}</h1>
                     <button class="btn btn-primary" id="add-endpoint-btn">
-                        <span>+ Add Endpoint</span>
+                        <span>${t('endpoints.addEndpoint')}</span>
                     </button>
                 </div>
 
@@ -61,8 +62,8 @@ class Endpoints {
             container.innerHTML = `
                 <div class="empty-state">
                     <div class="empty-state-icon">🔗</div>
-                    <div class="empty-state-title">No Endpoints</div>
-                    <div class="empty-state-message">Add your first endpoint to get started</div>
+                    <div class="empty-state-title">${t('endpoints.noEndpoints')}</div>
+                    <div class="empty-state-message">${t('endpoints.noEndpointsDesc')}</div>
                 </div>
             `;
             return;
@@ -74,12 +75,12 @@ class Endpoints {
                     <thead>
                         <tr>
                             <th style="width: 30px;"></th>
-                            <th>Name</th>
-                            <th>API URL</th>
-                            <th>Transformer</th>
-                            <th>Model</th>
-                            <th>Status</th>
-                            <th>Actions</th>
+                            <th>${t('common.name')}</th>
+                            <th>${t('endpoints.apiUrl')}</th>
+                            <th>${t('endpoints.transformer')}</th>
+                            <th>${t('endpoints.model')}</th>
+                            <th>${t('common.status')}</th>
+                            <th>${t('common.actions')}</th>
                         </tr>
                     </thead>
                     <tbody id="endpoints-tbody">
@@ -98,14 +99,14 @@ class Endpoints {
         const isCurrentEndpoint = ep.name === this.currentEndpoint;
         const testStatus = this.getTestStatus(ep.name);
         let testStatusIcon = '⚠️';
-        let testStatusTitle = 'Not tested';
+        let testStatusTitle = t('endpoints.notTested');
 
         if (testStatus === true) {
             testStatusIcon = '✅';
-            testStatusTitle = 'Test passed';
+            testStatusTitle = t('endpoints.testPassed');
         } else if (testStatus === false) {
             testStatusIcon = '❌';
-            testStatusTitle = 'Test failed';
+            testStatusTitle = t('endpoints.testFailed');
         }
 
         return `
@@ -114,11 +115,11 @@ class Endpoints {
                 <td>
                     <strong>${this.escapeHtml(ep.name)}</strong>
                     <span title="${testStatusTitle}" style="margin-left: 5px;">${testStatusIcon}</span>
-                    ${isCurrentEndpoint ? '<span class="badge badge-primary" style="margin-left: 5px;">Current</span>' : ''}
+                    ${isCurrentEndpoint ? `<span class="badge badge-primary" style="margin-left: 5px;">${t('common.current')}</span>` : ''}
                 </td>
                 <td>
                     <code style="font-size: 12px;">${this.escapeHtml(ep.apiUrl)}</code>
-                    <button class="btn-icon copy-btn" data-copy="${this.escapeHtml(ep.apiUrl)}" title="Copy URL">
+                    <button class="btn-icon copy-btn" data-copy="${this.escapeHtml(ep.apiUrl)}" title="${t('common.copyUrl')}">
                         📋
                     </button>
                 </td>
@@ -128,22 +129,22 @@ class Endpoints {
                 <td>
                     <div class="flex gap-2">
                         ${ep.enabled && !isCurrentEndpoint ? `
-                            <button class="btn btn-sm btn-secondary switch-btn" data-name="${this.escapeHtml(ep.name)}" title="Switch to this endpoint">
-                                Switch
+                            <button class="btn btn-sm btn-secondary switch-btn" data-name="${this.escapeHtml(ep.name)}" title="${t('endpoints.switchTo')}">
+                                ${t('common.switch')}
                             </button>
                         ` : ''}
                         <button class="btn btn-sm btn-secondary test-btn" data-name="${this.escapeHtml(ep.name)}">
-                            Test
+                            ${t('common.test')}
                         </button>
                         <label class="toggle-switch">
                             <input type="checkbox" class="toggle-endpoint" data-name="${this.escapeHtml(ep.name)}" ${ep.enabled ? 'checked' : ''}>
                             <span class="toggle-slider"></span>
                         </label>
                         <button class="btn btn-sm btn-secondary edit-btn" data-name="${this.escapeHtml(ep.name)}">
-                            Edit
+                            ${t('common.edit')}
                         </button>
                         <button class="btn btn-sm btn-danger delete-btn" data-name="${this.escapeHtml(ep.name)}">
-                            Delete
+                            ${t('common.delete')}
                         </button>
                     </div>
                 </td>

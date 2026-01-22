@@ -4,6 +4,58 @@ import { dashboard } from './components/dashboard.js';
 import { endpoints } from './components/endpoints.js';
 import { stats } from './components/stats.js';
 import { testing } from './components/testing.js';
+import { t, getLanguage, setLanguage, getAvailableLanguages } from './i18n/index.js';
+
+// Export t function for global use
+window.t = t;
+
+// Initialize language switcher
+function initLanguage() {
+    const savedLang = localStorage.getItem('ccNexus_language') || 'en';
+    setLanguage(savedLang);
+    updateNavTexts();
+
+    // Add language toggle button
+    const sidebarFooter = document.querySelector('.sidebar-footer');
+    if (sidebarFooter) {
+        const langToggle = document.createElement('button');
+        langToggle.id = 'lang-toggle';
+        langToggle.className = 'btn-icon';
+        langToggle.title = 'Switch Language / 切换语言';
+        langToggle.innerHTML = `<span class="icon">${savedLang === 'zh-CN' ? '中' : 'EN'}</span>`;
+        langToggle.style.marginRight = '8px';
+        sidebarFooter.insertBefore(langToggle, sidebarFooter.firstChild);
+
+        langToggle.addEventListener('click', () => {
+            const currentLang = getLanguage();
+            const newLang = currentLang === 'en' ? 'zh-CN' : 'en';
+            setLanguage(newLang);
+            langToggle.querySelector('.icon').textContent = newLang === 'zh-CN' ? '中' : 'EN';
+            updateNavTexts();
+            // Re-render current view
+            const currentView = state.get('currentView') || 'dashboard';
+            router.navigate(currentView);
+        });
+    }
+}
+
+// Update navigation texts
+function updateNavTexts() {
+    const navLinks = document.querySelectorAll('.nav-link');
+    navLinks.forEach(link => {
+        const view = link.dataset.view;
+        const textSpan = link.querySelector('span:last-child');
+        if (textSpan && view) {
+            textSpan.textContent = t(`nav.${view}`);
+        }
+    });
+
+    // Update subtitle
+    const subtitle = document.querySelector('.sidebar-header .subtitle');
+    if (subtitle) {
+        subtitle.textContent = 'AI Proxy Admin';
+    }
+}
 
 // Initialize theme
 function initTheme() {
@@ -65,7 +117,8 @@ function init() {
     // Initialize theme
     initTheme();
 
-    // Initialize router
+    // Initialize language
+    initLanguage();
     router.init();
 
     // Initialize real-time updates

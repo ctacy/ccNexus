@@ -1,6 +1,7 @@
 import { api } from '../api.js';
 import { notifications } from '../utils/notifications.js';
 import { formatNumber, formatTokens } from '../utils/formatters.js';
+import { t } from '../i18n/index.js';
 
 class Stats {
     constructor() {
@@ -10,12 +11,12 @@ class Stats {
     async render() {
         this.container.innerHTML = `
             <div class="stats">
-                <h1>Statistics</h1>
+                <h1>${t('stats.title')}</h1>
 
                 <div class="flex gap-2 mt-3 mb-3">
-                    <button class="btn btn-sm btn-primary period-btn active" data-period="daily">Daily</button>
-                    <button class="btn btn-sm btn-secondary period-btn" data-period="weekly">Weekly</button>
-                    <button class="btn btn-sm btn-secondary period-btn" data-period="monthly">Monthly</button>
+                    <button class="btn btn-sm btn-primary period-btn active" data-period="daily">${t('stats.daily')}</button>
+                    <button class="btn btn-sm btn-secondary period-btn" data-period="weekly">${t('stats.weekly')}</button>
+                    <button class="btn btn-sm btn-secondary period-btn" data-period="monthly">${t('stats.monthly')}</button>
                 </div>
 
                 <div id="stats-content"></div>
@@ -54,7 +55,7 @@ class Stats {
 
             this.renderStats(data);
         } catch (error) {
-            notifications.error('Failed to load statistics: ' + error.message);
+            notifications.error(t('stats.loadFailed') + ': ' + error.message);
         }
     }
 
@@ -65,26 +66,26 @@ class Stats {
         container.innerHTML = `
             <div class="grid grid-cols-4 mb-4">
                 <div class="stat-card">
-                    <div class="stat-label">Total Requests</div>
+                    <div class="stat-label">${t('stats.totalRequests')}</div>
                     <div class="stat-value">${formatNumber(stats.totalRequests || 0)}</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-label">Successful</div>
+                    <div class="stat-label">${t('common.success')}</div>
                     <div class="stat-value">${formatNumber(stats.totalSuccess || 0)}</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-label">Errors</div>
+                    <div class="stat-label">${t('stats.errors')}</div>
                     <div class="stat-value">${formatNumber(stats.totalErrors || 0)}</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-label">Total Tokens</div>
+                    <div class="stat-label">${t('stats.totalTokens')}</div>
                     <div class="stat-value">${formatTokens((stats.totalInputTokens || 0) + (stats.totalOutputTokens || 0))}</div>
                 </div>
             </div>
 
             <div class="card">
                 <div class="card-header">
-                    <h3 class="card-title">Endpoint Breakdown</h3>
+                    <h3 class="card-title">${t('stats.endpoint')}</h3>
                 </div>
                 <div class="card-body">
                     ${this.renderEndpointTable(stats.endpoints || {})}
@@ -97,7 +98,7 @@ class Stats {
         const endpointNames = Object.keys(endpoints);
 
         if (endpointNames.length === 0) {
-            return '<div class="empty-state"><p>No data available</p></div>';
+            return `<div class="empty-state"><p>${t('stats.noData')}</p></div>`;
         }
 
         return `
@@ -105,17 +106,17 @@ class Stats {
                 <table class="table">
                     <thead>
                         <tr>
-                            <th>Endpoint</th>
-                            <th>Requests</th>
-                            <th>Errors</th>
-                            <th>Input Tokens</th>
-                            <th>Output Tokens</th>
+                            <th>${t('stats.endpoint')}</th>
+                            <th>${t('stats.requests')}</th>
+                            <th>${t('stats.errors')}</th>
+                            <th>${t('stats.inputTokens')}</th>
+                            <th>${t('stats.outputTokens')}</th>
                         </tr>
                     </thead>
                     <tbody>
                         ${endpointNames.map(name => {
-                            const ep = endpoints[name];
-                            return `
+            const ep = endpoints[name];
+            return `
                                 <tr>
                                     <td><strong>${this.escapeHtml(name)}</strong></td>
                                     <td>${formatNumber(ep.requests || 0)}</td>
@@ -124,7 +125,7 @@ class Stats {
                                     <td>${formatTokens(ep.outputTokens || 0)}</td>
                                 </tr>
                             `;
-                        }).join('')}
+        }).join('')}
                     </tbody>
                 </table>
             </div>
@@ -139,3 +140,4 @@ class Stats {
 }
 
 export const stats = new Stats();
+

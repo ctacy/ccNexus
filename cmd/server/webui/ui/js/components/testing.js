@@ -1,5 +1,6 @@
 import { api } from '../api.js';
 import { notifications } from '../utils/notifications.js';
+import { t } from '../i18n/index.js';
 
 class Testing {
     constructor() {
@@ -10,19 +11,19 @@ class Testing {
     async render() {
         this.container.innerHTML = `
             <div class="testing">
-                <h1>Endpoint Testing</h1>
+                <h1>${t('testing.title')}</h1>
 
                 <div class="card mt-3">
                     <div class="card-body">
                         <div class="form-group">
-                            <label class="form-label">Select Endpoint</label>
+                            <label class="form-label">${t('testing.selectEndpoint')}</label>
                             <select class="form-select" id="test-endpoint-select">
-                                <option value="">Loading...</option>
+                                <option value="">${t('common.loading')}</option>
                             </select>
                         </div>
 
                         <div class="form-group">
-                            <button class="btn btn-primary" id="test-btn">Run Test</button>
+                            <button class="btn btn-primary" id="test-btn">${t('testing.sendRequest')}</button>
                         </div>
 
                         <div id="test-result" class="mt-3" style="display: none;"></div>
@@ -45,7 +46,7 @@ class Testing {
             const enabledEndpoints = this.endpoints.filter(ep => ep.enabled);
 
             if (enabledEndpoints.length === 0) {
-                select.innerHTML = '<option value="">No enabled endpoints</option>';
+                select.innerHTML = `<option value="">${t('testing.noEndpoints')}</option>`;
                 return;
             }
 
@@ -53,7 +54,7 @@ class Testing {
                 `<option value="${this.escapeHtml(ep.name)}">${this.escapeHtml(ep.name)}</option>`
             ).join('');
         } catch (error) {
-            notifications.error('Failed to load endpoints: ' + error.message);
+            notifications.error(t('stats.loadFailed') + ': ' + error.message);
         }
     }
 
@@ -62,7 +63,7 @@ class Testing {
         const endpointName = select.value;
 
         if (!endpointName) {
-            notifications.warning('Please select an endpoint');
+            notifications.warning(t('testing.selectEndpointFirst'));
             return;
         }
 
@@ -77,21 +78,21 @@ class Testing {
                 resultDiv.innerHTML = `
                     <div class="card" style="background-color: var(--bg-secondary);">
                         <div class="mb-2">
-                            <span class="badge badge-success">Success</span>
-                            <span class="text-muted ml-2">Latency: ${result.latency}ms</span>
+                            <span class="badge badge-success">${t('common.success')}</span>
+                            <span class="text-muted ml-2">${t('test.latency')}: ${result.latency}ms</span>
                         </div>
                         <div>
-                            <strong>Response:</strong>
-                            <div class="code-block mt-1">${this.escapeHtml(result.response || 'No response')}</div>
+                            <strong>${t('test.response')}:</strong>
+                            <div class="code-block mt-1">${this.escapeHtml(result.response || t('test.noResponse'))}</div>
                         </div>
                     </div>
                 `;
-                notifications.success('Test completed successfully');
+                notifications.success(t('test.testSuccess').replace('{latency}', result.latency));
             } else {
                 resultDiv.innerHTML = `
                     <div class="card" style="background-color: var(--bg-secondary);">
                         <div class="mb-2">
-                            <span class="badge badge-danger">Failed</span>
+                            <span class="badge badge-danger">${t('common.failed')}</span>
                         </div>
                         <div>
                             <strong>Error:</strong>
@@ -99,7 +100,7 @@ class Testing {
                         </div>
                     </div>
                 `;
-                notifications.error('Test failed');
+                notifications.error(t('test.testFailed'));
             }
         } catch (error) {
             resultDiv.innerHTML = `
@@ -113,7 +114,7 @@ class Testing {
                     </div>
                 </div>
             `;
-            notifications.error('Test failed: ' + error.message);
+            notifications.error(t('testing.requestFailed') + ': ' + error.message);
         }
     }
 
@@ -125,3 +126,4 @@ class Testing {
 }
 
 export const testing = new Testing();
+
